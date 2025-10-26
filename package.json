@@ -1,0 +1,19 @@
+{
+  "name": "docus-starter",
+  "scripts": {
+    "dev": "PORT=3502 nuxt dev --extends docus",
+    "build": "nuxt build --extends docus"
+  },
+  "dependencies": {
+    "@nuxt/content": "^3.7.1",
+    "@nuxtjs/plausible": "^2.0.1",
+    "better-sqlite3": "^12.2.0",
+    "docus": "latest",
+    "nuxt": "^4.2.0",
+    "vuetify": "^3.10.7"
+  },
+  "devDependencies": {
+    "@types/node": "^24.9.1",
+    "typescript": "^5.9.3"
+  }
+}

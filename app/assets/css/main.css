@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "@nuxt/ui";
+
+@theme static {
+  --font-sans: 'Public Sans', sans-serif;
+  --ui-container: 90rem;
+}
+
+/* Modo claro */
+:root {
+  --ui-primary: #2b9180;
+  --ui-bg: #ffffff;  
+  --ui-text: #000000;    
+}
+
+/* Modo oscuro */
+html.dark {
+  --ui-primary: #51fbde;
+  --ui-bg: #050505;    
+  --ui-text: #ffffff;    
+}
+
+
+header{
+  background-color: transparent;
+}
+
+#__nuxt > header > div{
+  backdrop-filter: blur(16px);
+}
+
+html.dark > header > div{
+  background-color: oklab(0 none none / .65);
+}

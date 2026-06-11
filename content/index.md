@@ -111,12 +111,49 @@ A modern approach to database management with powerful features that boost produ
   :::u-page-feature
   ---
   icon: i-lucide-sparkles
+  to: /guides/query-builder/computed-fields
   ---
   #title
   Computed Fields
 
   #description
   Define virtual columns calculated on-the-fly based on other field values with typescript functions.
+  :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-package
+  to: /guides/orm/overview
+  ---
+  #title
+  All-in-One ORM
+
+  #description
+  One `dbcube` package, every database. Configure once with dbcube.config.js and connect to all your databases from a single registry.
+  :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-wrench
+  to: /guides/schemas/alter-tables
+  ---
+  #title
+  Declarative Migrations
+
+  #description
+  Surgical schema changes with .alter.cube files: rename, add, drop, and modify columns — data preserved, every engine supported.
+  :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-cpu
+  to: /getting-started/architecture
+  ---
+  #title
+  Rust-Powered Engines
+
+  #description
+  Parsing, query generation, and execution run in native Rust binaries — keeping your Node.js event loop free and fast.
   :::
 ::
 
@@ -175,17 +212,18 @@ files:
   - filename: "Aggregations"
     language: "typescript"
     code: |
-      // Count users
-      const total = await db.table('users').count().first();
+      // Aggregations execute directly and return a number
+      const total = await db.table('users').count();
 
-      // Group by and aggregate
-      const stats = await db.table('orders')
-        .select(['user_id', 'country'])
-        .sum('amount')
+      const revenue = await db.table('orders')
         .where('status', '=', 'completed')
-        .groupBy('country')
-        .orderBy('sum', 'DESC')
-        .get();
+        .sum('amount');
+
+      const avgTicket = await db.table('orders')
+        .where('status', '=', 'completed')
+        .avg('amount');
+
+      const lastOrder = await db.table('orders').max('created_at');
   - filename: "Advanced Features"
     language: "typescript"
     code: |
@@ -198,10 +236,10 @@ files:
         .get();
 
       // Enable triggers for business logic
-      await db.useTriggers();
+      const dbT = await new Database('myapp').useTriggers();
 
       // Triggers execute automatically on operations
-      await db.table('orders').insert([
+      await dbT.table('orders').insert([
         { user_id: 1, amount: 99.99 }
       ]);
       // beforeAdd and afterAdd triggers execute

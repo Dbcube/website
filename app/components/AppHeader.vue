@@ -1,10 +1,10 @@
 <script setup lang="ts">
 const appConfig = useAppConfig();
+const colorMode = useColorMode();
+const toast = useToast();
 
 // Logo personalizado
 const logoElement = ref<HTMLElement | null>(null);
-const isDark = ref(false);
-const toast = useToast();
 const mobileMenuOpen = ref(false);
 
 // Enlaces de navegación principales
@@ -16,16 +16,9 @@ const navLinks = [
   { label: "Enterprise", to: "/enterprise" },
 ];
 
-// Detectar el tema actual
-const updateTheme = () => {
-  if (process.client) {
-    isDark.value = document.documentElement.classList.contains("dark");
-  }
-};
-
-// Logo según el tema
+// Logo según el tema (reactivo e instantáneo)
 const logoSrc = computed(() => {
-  return isDark.value
+  return colorMode.value === "dark"
     ? "https://pub-d1faa8ef561c493db89f6133874bc143.r2.dev/DBLOGO-WHITE-LARGE.webp"
     : "https://pub-d1faa8ef561c493db89f6133874bc143.r2.dev/DBLOGO-BLACK-LARGE.webp";
 });
@@ -82,17 +75,6 @@ const logoContextMenuItems = [
     },
   ],
 ];
-
-// Observar cambios de tema
-onMounted(() => {
-  updateTheme();
-  const observer = new MutationObserver(updateTheme);
-  observer.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["class"],
-  });
-  onBeforeUnmount(() => observer.disconnect());
-});
 </script>
 
 <template>

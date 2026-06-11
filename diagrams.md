@@ -5,6 +5,7 @@
 > En las páginas nuevas dejé marcadores HTML del tipo `<!-- DIAGRAM: id -->` — busca el ID y reemplaza el comentario por la imagen.
 >
 > **Convención de archivos sugerida:** exportar a `my-docs/public/diagrams/<id>.svg` y embeber con:
+>
 > ```md
 > ![Texto alternativo](/diagrams/<id>.svg)
 > ```
@@ -257,17 +258,17 @@ flowchart LR
 
 ## Resumen de inserción
 
-| # | ID | Archivo destino | Marcador existente |
-|---|----|-----------------|--------------------|
-| 1 | `ecosystem-hero` | `content/index.md` | No (insertar en hero/features) |
-| 2 | `architecture-overview` | `content/1.getting-started/4.architecture.md` | ✅ `<!-- DIAGRAM: architecture-overview -->` |
-| 3 | `query-flow` | `content/1.getting-started/4.architecture.md` | ✅ `<!-- DIAGRAM: query-flow -->` |
-| 4 | `schema-flow` | `content/1.getting-started/4.architecture.md` | ✅ `<!-- DIAGRAM: schema-flow -->` |
-| 5 | `package-dependencies` | `content/1.getting-started/4.architecture.md` | ✅ `<!-- DIAGRAM: package-dependencies -->` |
-| 6 | `computed-fields-flow` | `content/2.guides/query-builder/8.computed-fields.md` | ✅ `<!-- DIAGRAM: computed-fields-flow -->` |
-| 7 | `trigger-lifecycle` | `content/2.guides/query-builder/9.runtime-triggers.md` | ✅ `<!-- DIAGRAM: trigger-lifecycle -->` |
-| 8 | `migration-strategies` | `content/2.guides/schemas/7.alter-tables.md` | ✅ `<!-- DIAGRAM: migration-strategies -->` |
-| 9 | `cube-file-types` | `content/2.guides/schemas/1.overview.md` | No (insertar bajo "Types of .cube Files") |
-| 10 | `config-db-state` | `content/1.getting-started/4.architecture.md` | No (insertar bajo "Local State") |
+| #   | ID                      | Archivo destino                                        | Marcador existente                           |
+| --- | ----------------------- | ------------------------------------------------------ | -------------------------------------------- |
+| 1   | `ecosystem-hero`        | `content/index.md`                                     | No (insertar en hero/features)               |
+| 2   | `architecture-overview` | `content/1.getting-started/4.architecture.md`          | ✅ `<!-- DIAGRAM: architecture-overview -->` |
+| 3   | `query-flow`            | `content/1.getting-started/4.architecture.md`          | ✅ `<!-- DIAGRAM: query-flow -->`            |
+| 4   | `schema-flow`           | `content/1.getting-started/4.architecture.md`          | ✅ `<!-- DIAGRAM: schema-flow -->`           |
+| 5   | `package-dependencies`  | `content/1.getting-started/4.architecture.md`          | ✅ `<!-- DIAGRAM: package-dependencies -->`  |
+| 6   | `computed-fields-flow`  | `content/2.guides/query-builder/8.computed-fields.md`  | ✅ `<!-- DIAGRAM: computed-fields-flow -->`  |
+| 7   | `trigger-lifecycle`     | `content/2.guides/query-builder/9.runtime-triggers.md` | ✅ `<!-- DIAGRAM: trigger-lifecycle -->`     |
+| 8   | `migration-strategies`  | `content/2.guides/schemas/7.alter-tables.md`           | ✅ `<!-- DIAGRAM: migration-strategies -->`  |
+| 9   | `cube-file-types`       | `content/2.guides/schemas/1.overview.md`               | No (insertar bajo "Types of .cube Files")    |
+| 10  | `config-db-state`       | `content/1.getting-started/4.architecture.md`          | No (insertar bajo "Local State")             |
 
 Cuando tengas un diagrama exportado, avísame y lo integro en la página con el componente de imagen del sitio.

@@ -39,6 +39,19 @@ Objetivo: insertar los diagramas de `diagrams.md` una vez creados en el sistema 
 - [ ] Capturas de pantalla reales de las extensiones VSCode (resaltado, autocompletado, hover) para `vscode-extension/overview` y `vscode-extension/snippets`.
 - [ ] GIF corto del flujo CLI (`table:fresh` con salida de progreso) para `cli/overview`.
 
+## ✅ Fase 2.5 — Documentar la API v2 de la librería (COMPLETADA 2026-06-11)
+
+- [x] **Transacciones + Raw**: página nueva `guides/query-builder/10.transactions-raw.md`; API table de database.md actualizada.
+- [x] **Métodos nuevos del builder**: tablas de referencia de `2.table.md`; `paginate()/chunk()/exists()` en data-retrieval; `upsert/increment/decrement/truncate` en data-modification; `whereNotIn` en where-conditions; `offset()/paginate()` en ordering-pagination.
+- [x] **Eager loading `with()`**: página nueva `guides/query-builder/11.eager-loading.md`.
+- [x] **Daemon mode**: sección "Daemon Mode: Sub-Millisecond Queries" en architecture.md (portfile, transacciones, 0.3ms, `DBCUBE_DAEMON=0`).
+- [x] **CLI nuevo**: cli/overview con secciones Project/Migration Commands; cli/schema con confirmación escrita de fresh, refresh no-destructivo, `--dry-run/--all`, migrate:status/rollback.
+- [x] **Migraciones**: sección "Migration History, Dry-Run & Rollback" en alter-tables.md.
+- [x] **Tipos generados**: página nueva `getting-started/5.typescript-types.md`.
+- [x] Tabla comparativa del home actualizada (transacciones, tipos generados, introspección, eager loading, rollback, 0.3ms/query).
+
+> Nota: publicar los paquetes npm + binarios antes de desplegar el sitio para que docs y realidad coincidan.
+
 ## 📚 Fase 3 — Profundidad de contenido
 
 Objetivo: pasar de "todo documentado" a "la mejor documentación que existe".

@@ -380,14 +380,18 @@ See how Dbcube compares to other popular solutions.
 |---------|--------|-----------|--------|---------|
 | Multi-database support | ✓ MySQL, PostgreSQL, SQLite, MongoDB | ✓ MySQL, PostgreSQL, SQLite | ✓ MySQL, PostgreSQL, SQLite | ✓ MySQL, PostgreSQL, SQLite |
 | Fluent query builder | ✓ | ✓ | ✗ (uses custom syntax) | ✓ |
-| TypeScript support | ✓ Native | ✓ Via @types | ✓ Native | ✓ Native |
+| Transactions | ✓ With auto-rollback | ✓ | ✓ | ✓ |
+| Generated types from schema | ✓ `dbcube generate` | ✗ | ✓ | ✗ |
+| Introspection (existing DB) | ✓ `dbcube run pull` | ✗ | ✓ `db pull` | ✗ |
+| Eager loading | ✓ `with()` — no N+1 | ✓ | ✓ `include` | ✓ |
 | Declarative schemas | ✓ .cube files | ✗ Code-based | ✓ Prisma schema | ✗ Decorators |
+| Migration rollback | ✓ Auto-generated reverses | ✓ | ✗ | ✓ |
 | Built-in triggers | ✓ | ✗ | ✗ | ✗ |
 | Computed fields | ✓ | ✗ | ✗ | ✗ |
 | CLI tools | ✓ Powerful | ✓ Basic | ✓ Powerful | ✓ Basic |
 | Learning curve | Low | Medium | Medium | High |
 | Bundle size | ~50KB | ~1.2MB | Client-only | ~800KB |
-| Performance | High (Rust engine) | Medium | High | Medium |
+| Performance | High (Rust daemon, ~0.3ms/query) | Medium | High | Medium |
 
 ::callout{type="success"}
 **Unique to Dbcube**: `.cube` file format, database triggers, computed fields, and unified API across SQL and NoSQL databases.

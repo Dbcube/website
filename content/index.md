@@ -155,6 +155,18 @@ A modern approach to database management with powerful features that boost produ
   #description
   Parsing, query generation, and execution run in native Rust binaries — keeping your Node.js event loop free and fast.
   :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-gauge
+  to: /performance/overview
+  ---
+  #title
+  Benchmarked to Beat Prisma
+
+  #description
+  Wins or ties every operation against Prisma, Drizzle, TypeORM and Knex on real PostgreSQL — fastest of all for reads, updates, transactions and concurrency.
+  :::
 ::
 
 ::u-page-section
@@ -391,10 +403,17 @@ See how Dbcube compares to other popular solutions.
 | CLI tools | ✓ Powerful | ✓ Basic | ✓ Powerful | ✓ Basic |
 | Learning curve | Low | Medium | Medium | High |
 | Bundle size | ~50KB | ~1.2MB | Client-only | ~800KB |
-| Performance | High (Rust daemon, ~0.3ms/query) | Medium | High | Medium |
+| Performance | **Fastest** — beats Prisma in 8/9 ops (Rust engine, pipelining) | Medium | High | Medium |
 
 ::callout{type="success"}
 **Unique to Dbcube**: `.cube` file format, database triggers, computed fields, and unified API across SQL and NoSQL databases.
+::
+
+::callout{type="info"}
+**Benchmarked, not claimed.** Against a real PostgreSQL 16, DBCube wins or ties
+every operation versus Prisma, Drizzle, TypeORM and Knex — and is the fastest of
+all for primary-key reads, updates, transactions and concurrency. See
+[Performance](/performance/overview) and [run it yourself](/performance/benchmarks).
 ::
 ::
 

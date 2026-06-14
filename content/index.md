@@ -167,6 +167,18 @@ A modern approach to database management with powerful features that boost produ
   #description
   Wins or ties every operation against Prisma, Drizzle, TypeORM and Knex on real PostgreSQL — fastest of all for reads, updates, transactions and concurrency.
   :::
+
+  :::u-page-feature
+  ---
+  icon: i-lucide-cloud
+  to: /getting-started/configuration#cloud-databases-url--tls
+  ---
+  #title
+  Cloud Databases over TLS
+
+  #description
+  Connect to Supabase, Neon, PlanetScale, MongoDB Atlas and Turso with a single URL — TLS on by default. Same API and schemas, local or in the cloud.
+  :::
 ::
 
 ::u-page-section
@@ -391,6 +403,7 @@ See how Dbcube compares to other popular solutions.
 | Feature | Dbcube | Sequelize | Prisma | TypeORM |
 |---------|--------|-----------|--------|---------|
 | Multi-database support | ✓ MySQL, PostgreSQL, SQLite, MongoDB | ✓ MySQL, PostgreSQL, SQLite | ✓ MySQL, PostgreSQL, SQLite | ✓ MySQL, PostgreSQL, SQLite |
+| Managed/cloud over TLS | ✓ Supabase, Neon, PlanetScale, Atlas, Turso | partial | ✓ | partial |
 | Fluent query builder | ✓ | ✓ | ✗ (uses custom syntax) | ✓ |
 | Transactions | ✓ With auto-rollback | ✓ | ✓ | ✓ |
 | Generated types from schema | ✓ `dbcube generate` | ✗ | ✓ | ✗ |

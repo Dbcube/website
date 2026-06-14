@@ -403,7 +403,7 @@ See how Dbcube compares to other popular solutions.
 | CLI tools | ✓ Powerful | ✓ Basic | ✓ Powerful | ✓ Basic |
 | Learning curve | Low | Medium | Medium | High |
 | Bundle size | ~50KB | ~1.2MB | Client-only | ~800KB |
-| Performance | **Fastest** — beats Prisma in 8/9 ops (Rust engine, pipelining) | Medium | High | Medium |
+| Performance | **Fastest** — beats Prisma in 8/9 ops (Rust engine) | Medium | High | Medium |
 
 ::callout{type="success"}
 **Unique to Dbcube**: `.cube` file format, database triggers, computed fields, and unified API across SQL and NoSQL databases.

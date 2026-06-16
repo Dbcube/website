@@ -39,6 +39,8 @@ onMounted(() => {
   const TOP_POS = new THREE.Vector3(0, 14, 2.6);
   const TOP_TGT = new THREE.Vector3(0, -1, 0);
   const TOP_FAR = new THREE.Vector3(0, 18.5, 3.4); // reveal: cámara se aleja un poco → placa algo menor
+  const STATS_POS = new THREE.Vector3(4.5, 5.5, 12); // fase 3: vista angular dramática para los stats
+  const STATS_TGT = new THREE.Vector3(0, 0.6, 0);
   const camTgt = new THREE.Vector3();
   camera.position.copy(ISO_POS);
   camera.lookAt(ISO_TGT);
@@ -358,43 +360,42 @@ onMounted(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
     elapsed += dt;
 
-    // Scrollytelling en 2 fases:
-    //  Fase 1 (0 → PHASE1): el cubo desciende, encoge y se posa en el chip.
-    //  Fase 2 (PHASE1 → 1): la cámara pasa a vista cenital → la placa se ve como
-    //  un cuadrado plano centrado (sección "placa incrustada").
+    // Scrollytelling en 3 fases (mismos umbrales que HomeLanding):
+    //  1) cubo entra al chip   2) placa se aplana/encoge + bases de datos (HTML)
+    //  3) STATS: la cámara va a vista angular, el cubo RE-EMERGE y flota.
     const p = Math.min(Math.max(props.progress ?? 0, 0), 1);
-    const PHASE1 = 0.45;
-    const p1 = Math.min(p / PHASE1, 1);
-    const phase2 = Math.max((p - PHASE1) / (1 - PHASE1), 0);
-    // La fase 2 se subdivide: primero SETTLE (la placa se acomoda → cenital),
-    // luego REVEAL (aparecen tubos en L, iconos y pulsos) y al final el título.
-    const settle = Math.min(phase2 / 0.5, 1);
-    const reveal = Math.max((phase2 - 0.5) / 0.5, 0);
-    const e = p1 * p1 * (3 - 2 * p1); // smoothstep fase 1
-    const eSettle = settle * settle * (3 - 2 * settle);
-    // el encogido de la placa TERMINA pronto (primer 40% del reveal) → así queda
-    // "bien acomodada" antes de que aparezcan los tubos del overlay.
-    const shrink = Math.min(reveal / 0.4, 1);
-    const eShrink = shrink * shrink * (3 - 2 * shrink);
+    const seg = (a: number, b: number) => Math.min(Math.max((p - a) / (b - a), 0), 1);
+    const ss = (x: number) => x * x * (3 - 2 * x);
+    const cubeIn = seg(0, 0.26);
+    const eFlat = ss(seg(0.3, 0.45));
+    const eShrink = ss(seg(0.45, 0.53));
+    const eStats = ss(seg(0.78, 0.9)); // el movimiento arranca DESPUÉS de retraer los tubos
 
     const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
     const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
-    const scaleNow = SCALE * (1 - (1 - MIN_RATIO) * e);
-    cube.scale.setScalar(scaleNow);
-    const halfMin = outerHalf * SCALE * MIN_RATIO; // semialtura del cubo en su tamaño mínimo
+    const e = ss(cubeIn);
+    const halfMin = outerHalf * SCALE * MIN_RATIO;
     const restY = BOARD_TOP_Y - SINK + halfMin; // centro al quedar posado (carita sobresale)
-    const hoverY = HOVER + Math.sin(elapsed * 1.2) * 0.12 * (1 - p1); // el bob se apaga
-    cube.position.y = hoverY + (restY - hoverY) * e;
+    const hoverY = HOVER + Math.sin(elapsed * 1.2) * 0.12 * (1 - cubeIn); // el bob se apaga
+    let cubeScale = SCALE * (1 - (1 - MIN_RATIO) * e);
+    let cubeY = hoverY + (restY - hoverY) * e;
+    // FASE 3: el cubo re-emerge del chip, crece y vuelve a flotar
+    if (eStats > 0) {
+      cubeScale = THREE.MathUtils.lerp(cubeScale, SCALE * 0.72, eStats);
+      cubeY = THREE.MathUtils.lerp(cubeY, 1.7 + Math.sin(elapsed * 1.0) * 0.12, eStats);
+    }
+    cube.scale.setScalar(cubeScale);
+    cube.position.y = cubeY;
 
-    // SETTLE: cámara isométrica → cenital (la placa se acomoda como cuadrado plano)
-    camera.position.lerpVectors(ISO_POS, TOP_POS, eSettle);
-    camTgt.lerpVectors(ISO_TGT, TOP_TGT, eSettle);
-    // REVEAL: la cámara se ALEJA → la placa se ve más pequeña y deja sitio al
-    // overlay HTML de las bases de datos.
-    if (reveal > 0) camera.position.lerpVectors(TOP_POS, TOP_FAR, eShrink);
+    // Cámara: ISO → cenital (aplana) → se aleja (encoge) → angular (stats)
+    camera.position.lerpVectors(ISO_POS, TOP_POS, eFlat);
+    if (eShrink > 0) camera.position.lerpVectors(TOP_POS, TOP_FAR, eShrink);
+    if (eStats > 0) camera.position.lerpVectors(TOP_FAR, STATS_POS, eStats);
+    camTgt.lerpVectors(ISO_TGT, TOP_TGT, eFlat);
+    if (eStats > 0) camTgt.lerpVectors(TOP_TGT, STATS_TGT, eStats);
     camera.lookAt(camTgt);
 
-    updateBridges(cubeBottom(), scaleNow / SCALE);
+    updateBridges(cubeBottom(), cubeScale / SCALE);
 
     for (const pl of pulses) {
       const curve = bridgeCurves[pl.bridge];

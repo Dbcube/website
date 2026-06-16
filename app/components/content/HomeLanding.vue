@@ -38,27 +38,41 @@ onBeforeUnmount(() => {
   }
 });
 
-// Fase 2 del scroll (coincide con PHASE1 del componente 3D = 0.45), subdividida:
-//  settle (0→0.5): la placa se ACOMODA (cenital), el banner se va, el canvas centra.
-//  reveal (0.5→1): aparecen tubos/iconos y, ya acomodada, el TÍTULO de sección.
-const PHASE1 = 0.45;
-const phase2 = computed(() => Math.max((progress.value - PHASE1) / (1 - PHASE1), 0));
-const settle = computed(() => Math.min(phase2.value / 0.5, 1));
-const reveal = computed(() => Math.max((phase2.value - 0.5) / 0.5, 0));
+// ── Scrollytelling en 3 fases (mismos umbrales que BlackHoleCube) ──
+//  F1 cubo→chip (0–0.26) · F2 aplanar (0.30–0.45)+encoger(0.45–0.53)+bases(0.55–0.66)
+//  · F3 stats (0.70–1): el cubo re-emerge, la placa se inclina, aparecen los datos.
+const seg = (a: number, b: number) => Math.min(Math.max((progress.value - a) / (b - a), 0), 1);
+const flatten = computed(() => seg(0.28, 0.48)); // la placa se acomoda
+// Transición F2→F3 en orden: (1) los tubos se RETRAEN, (2) la cámara/cubo se
+// mueven (en el componente 3D, 0.78–0.90), (3) aparecen los números (0.88+).
+const dbDrawIn = computed(() => seg(0.55, 0.63)); // los tubos se dibujan
+const dbRetract = computed(() => seg(0.69, 0.77)); // los tubos se retraen (reversa)
+const dashFactor = computed(() => 1 - dbDrawIn.value - dbRetract.value); // 1→0 (dibuja) → -1 (retrae)
+const statsIn = computed(() => seg(0.88, 0.96)); // los números aparecen ya posicionado
+
 // canvas: de translate(25%,-7%) → (0,0) (se centra mientras se acomoda)
 const canvasStyle = computed(() => {
-  const k = 1 - settle.value;
+  const k = 1 - flatten.value;
   return { transform: `translate(${25 * k}%, ${-7 * k}%)` };
 });
-// banner: "continúa su recorrido" (sube y se va) mientras la placa se acomoda
+// banner: sube y se va mientras la placa se acomoda
 const contentStyle = computed(() => ({
-  transform: `translate(30%, ${-settle.value * 60}vh)`,
-  opacity: 1 - Math.min(settle.value * 1.4, 1),
+  transform: `translate(30%, ${-flatten.value * 60}vh)`,
+  opacity: 1 - Math.min(flatten.value * 1.4, 1),
 }));
-// título de la sección 2: aparece SOLO después de que la placa ya se acomodó
+// título "One core, every database": entra con las bases de datos y se va al retraer
 const section2Style = computed(() => ({
-  opacity: Math.min(Math.max((reveal.value - 0.15) / 0.5, 0), 1),
+  opacity: seg(0.54, 0.63) * (1 - seg(0.69, 0.77)),
 }));
+
+// FASE 3 — stats de rendimiento (4 datos a los lados del cubo flotante)
+const STATS = [
+  { num: "8/9", label: "operations beat Prisma", x: 15, y: 33 },
+  { num: "0.73ms", label: "primary-key read", x: 15, y: 66 },
+  { num: "5", label: "databases, one API", x: 85, y: 33 },
+  { num: "1", label: "round-trip transaction", x: 85, y: 66 },
+];
+const statsStyle = computed(() => ({ opacity: statsIn.value }));
 
 // ── Overlay HTML/SVG de las bases de datos (sobre el canvas, ángulos rectos) ──
 const stageEl = ref<HTMLElement | null>(null);
@@ -97,12 +111,11 @@ const connectors = computed(() => {
     return { ...d, bx, by, d: dStr, len };
   });
 });
-// Los tubos/cajas se RETRASAN hasta que la placa ya está bien acomodada
-// (la placa termina de encoger ~reveal 0.4; los tubos arrancan después).
-const drawT = computed(() => Math.min(Math.max((reveal.value - 0.45) / 0.45, 0), 1)); // dibujado de los tubos
-const dbnetOpacity = computed(() => Math.min(Math.max((reveal.value - 0.45) / 0.25, 0), 1));
-const pulseOpacity = computed(() => Math.min(Math.max((reveal.value - 0.7) / 0.25, 0), 1));
-const boxOpacity = computed(() => Math.min(Math.max((reveal.value - 0.62) / 0.3, 0), 1));
+// Tubos: visibles mientras se dibujan y se retraen (la geometría hace el efecto,
+// la opacidad solo limpia al final). Cajas/pulsos se ocultan durante la retracción.
+const dbnetOpacity = computed(() => dbDrawIn.value * (1 - seg(0.78, 0.82)));
+const pulseOpacity = computed(() => seg(0.61, 0.69) * (1 - seg(0.69, 0.73)));
+const boxOpacity = computed(() => seg(0.59, 0.67) * (1 - seg(0.69, 0.75)));
 
 // Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
 let observer: IntersectionObserver | null = null;
@@ -204,7 +217,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
                 stroke-linejoin="round"
                 stroke-linecap="round"
                 :stroke-dasharray="c.len"
-                :stroke-dashoffset="c.len * (1 - drawT)"
+                :stroke-dashoffset="c.len * dashFactor"
               />
             </g>
             <circle v-for="(c, i) in connectors" :key="'p' + i" r="4" fill="#ffffff" :opacity="pulseOpacity">
@@ -227,6 +240,22 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
         <div class="hero__section2" :style="section2Style">
           <h2 class="s2__title">One core, <span class="hero__grad">every database</span></h2>
           <p class="s2__sub">PostgreSQL, MySQL, MongoDB and SQLite — one fluent API, one Rust engine.</p>
+        </div>
+
+        <!-- Sección 3: stats de rendimiento (cubo re-emerge + datos a los lados) -->
+        <div class="hero__stats" :style="statsStyle">
+          <div class="hero__stats-head">
+            <h2 class="s2__title">Benchmarked to <span class="hero__grad">beat Prisma</span></h2>
+          </div>
+          <div
+            v-for="(s, i) in STATS"
+            :key="'st' + i"
+            class="statcard"
+            :style="{ left: s.x + '%', top: s.y + '%' }"
+          >
+            <div class="statcard__num">{{ s.num }}</div>
+            <div class="statcard__lbl">{{ s.label }}</div>
+          </div>
         </div>
       </div>
     </section>
@@ -368,7 +397,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .hero {
   position: relative;
   width: 100vw;
-  height: 400vh; /* track: cubo→chip, placa se acomoda/encoge, y aparición escalonada de tubos+logos */
+  height: 520vh; /* track: 3 fases — cubo→chip, placa+bases de datos, y stats */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #04060a;
   --fg: #eef3f8;
@@ -508,6 +537,19 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 }
 .dbnet__logo { width: 52px; height: 52px; object-fit: contain; display: block; }
 .dbnet__label { font-size: 0.82rem; font-weight: 600; color: #cfe8f2; letter-spacing: 0.01em; }
+
+/* Sección 3 — stats de rendimiento */
+.hero__stats { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
+.hero__stats-head {
+  position: absolute; top: 6%; left: 0; right: 0; text-align: center; padding: 0 1.5rem;
+  text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
+}
+.statcard { position: absolute; transform: translate(-50%, -50%); width: clamp(150px, 16vw, 230px); text-align: center; }
+.statcard__num {
+  font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1;
+  background: linear-gradient(120deg, var(--cyan), #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent;
+}
+.statcard__lbl { margin-top: 0.45rem; color: #cfe8f2; font-size: clamp(0.82rem, 1.4vw, 0.98rem); }
 
 /* ── STATS ── */
 .stats { padding: 4rem 1.5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }

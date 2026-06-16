@@ -97,10 +97,12 @@ const connectors = computed(() => {
     return { ...d, bx, by, d: dStr, len };
   });
 });
-const drawT = computed(() => Math.min(reveal.value * 1.35, 1)); // dibujado de los tubos
-const dbnetOpacity = computed(() => Math.min(reveal.value * 2, 1));
-const pulseOpacity = computed(() => Math.min(Math.max((reveal.value - 0.35) / 0.4, 0), 1));
-const boxOpacity = computed(() => Math.min(Math.max((reveal.value - 0.5) / 0.4, 0), 1));
+// Los tubos/cajas se RETRASAN hasta que la placa ya está bien acomodada
+// (la placa termina de encoger ~reveal 0.4; los tubos arrancan después).
+const drawT = computed(() => Math.min(Math.max((reveal.value - 0.45) / 0.45, 0), 1)); // dibujado de los tubos
+const dbnetOpacity = computed(() => Math.min(Math.max((reveal.value - 0.45) / 0.25, 0), 1));
+const pulseOpacity = computed(() => Math.min(Math.max((reveal.value - 0.7) / 0.25, 0), 1));
+const boxOpacity = computed(() => Math.min(Math.max((reveal.value - 0.62) / 0.3, 0), 1));
 
 // Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
 let observer: IntersectionObserver | null = null;
@@ -366,7 +368,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .hero {
   position: relative;
   width: 100vw;
-  height: 340vh; /* track: cubo→chip, placa se acomoda, y aparición de tubos+logos */
+  height: 400vh; /* track: cubo→chip, placa se acomoda/encoge, y aparición escalonada de tubos+logos */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #04060a;
   --fg: #eef3f8;
@@ -480,12 +482,12 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 @keyframes bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
 /* Título de la sección 2 (placa incrustada + bases de datos) */
 .hero__section2 {
-  position: absolute; top: 9%; left: 0; right: 0; z-index: 2;
+  position: absolute; top: 4%; left: 0; right: 0; z-index: 2;
   text-align: center; padding: 0 1.5rem; pointer-events: none;
   text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
 }
-.s2__title { font-size: clamp(1.9rem, 4.5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; }
-.s2__sub { color: var(--muted); margin-top: 0.6rem; font-size: clamp(0.95rem, 1.6vw, 1.1rem); }
+.s2__title { font-size: clamp(1.9rem, 4.5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
+.s2__sub { color: var(--muted); margin-top: 0.2rem; font-size: clamp(0.95rem, 1.6vw, 1.1rem); }
 
 /* Overlay de bases de datos (HTML/SVG sobre el canvas) */
 .dbnet { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
@@ -563,6 +565,8 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 
 /* ── FINAL ── */
 .final { text-align: center; padding: 7rem 1.5rem; border-top: 1px solid var(--border); }
+/* el CTA final reusa .hero__cta (que va a la izquierda en el hero) → aquí centrado */
+.final .hero__cta { justify-content: center; }
 .final__title { font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; }
 .final__sub { color: var(--muted); margin: 0.8rem 0 1.8rem; font-size: 1.1rem; }
 .final__install { margin-bottom: 2rem; font-family: ui-monospace, monospace; }

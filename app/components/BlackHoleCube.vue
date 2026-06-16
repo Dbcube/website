@@ -372,7 +372,10 @@ onMounted(() => {
     const reveal = Math.max((phase2 - 0.5) / 0.5, 0);
     const e = p1 * p1 * (3 - 2 * p1); // smoothstep fase 1
     const eSettle = settle * settle * (3 - 2 * settle);
-    const eReveal = reveal * reveal * (3 - 2 * reveal);
+    // el encogido de la placa TERMINA pronto (primer 40% del reveal) → así queda
+    // "bien acomodada" antes de que aparezcan los tubos del overlay.
+    const shrink = Math.min(reveal / 0.4, 1);
+    const eShrink = shrink * shrink * (3 - 2 * shrink);
 
     const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
     const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
@@ -388,7 +391,7 @@ onMounted(() => {
     camTgt.lerpVectors(ISO_TGT, TOP_TGT, eSettle);
     // REVEAL: la cámara se ALEJA → la placa se ve más pequeña y deja sitio al
     // overlay HTML de las bases de datos.
-    if (reveal > 0) camera.position.lerpVectors(TOP_POS, TOP_FAR, eReveal);
+    if (reveal > 0) camera.position.lerpVectors(TOP_POS, TOP_FAR, eShrink);
     camera.lookAt(camTgt);
 
     updateBridges(cubeBottom(), scaleNow / SCALE);

@@ -1,11 +1,57 @@
 <script setup lang="ts">
-import { onMounted, onBeforeUnmount, computed } from "vue";
+import { onMounted, onBeforeUnmount, computed, ref } from "vue";
 
 // Tema: usamos el color-mode de Nuxt directamente para alternar las variables,
 // sin depender de que el selector global `.dark` quede como ancestro del
 // contenido renderizado por MDC (que a veces no aplica dentro de scoped CSS).
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === "dark");
+
+// ── Scrollytelling del hero ──
+// El `.hero` es un track alto; su `.hero__stage` queda pineado (sticky) mientras
+// se recorre el track. `progress` (0→1) mide cuánto se ha avanzado dentro del
+// track y se usa para que el cubo descienda, encoja y entre al chip.
+const heroEl = ref<HTMLElement | null>(null);
+const progress = ref(0);
+
+let onScroll: (() => void) | null = null;
+onMounted(() => {
+  const headerPx =
+    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-header-height")) || 64;
+  const compute = () => {
+    const el = heroEl.value;
+    if (!el) return;
+    const stageH = window.innerHeight - headerPx; // alto del stage pineado
+    const trackLen = el.offsetHeight - stageH; // distancia que el stage permanece pineado
+    const scrolled = headerPx - el.getBoundingClientRect().top; // cuánto se avanzó en el track
+    progress.value = trackLen > 0 ? Math.min(Math.max(scrolled / trackLen, 0), 1) : 0;
+  };
+  onScroll = () => requestAnimationFrame(compute);
+  window.addEventListener("scroll", onScroll, { passive: true });
+  window.addEventListener("resize", onScroll, { passive: true });
+  compute();
+});
+onBeforeUnmount(() => {
+  if (onScroll) {
+    window.removeEventListener("scroll", onScroll);
+    window.removeEventListener("resize", onScroll);
+  }
+});
+
+// Fase 2 del scroll (debe coincidir con PHASE1 del componente 3D = 0.45):
+// el canvas vuelve al centro y el título sube y se desvanece.
+const PHASE1 = 0.45;
+const phase2 = computed(() => Math.max((progress.value - PHASE1) / (1 - PHASE1), 0));
+// canvas: de translate(25%,-7%) → (0,0) (se centra al volverse cuadrado)
+const canvasStyle = computed(() => {
+  const k = 1 - phase2.value;
+  return { transform: `translate(${25 * k}%, ${-7 * k}%)` };
+});
+// título: mantiene su posición en fase 1 y "continúa su recorrido" (sube y se va) en fase 2
+const contentStyle = computed(() => ({
+  transform: `translate(30%, ${-phase2.value * 60}vh)`,
+  opacity: 1 - Math.min(phase2.value * 1.4, 1),
+}));
 
 // Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
 let observer: IntersectionObserver | null = null;
@@ -49,42 +95,44 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 
 <template>
   <div class="dbx" :class="{ 'dbx--dark': isDark }">
-    <!-- ════════ HERO ════════ -->
-    <section class="hero">
-      <div class="hero__canvas">
-        <ClientOnly>
-          <BlackHoleCube />
-        </ClientOnly>
-      </div>
-      <div class="hero__veil" />
+    <!-- ════════ HERO (track alto; el stage se queda pineado durante el scroll) ════════ -->
+    <section ref="heroEl" class="hero">
+      <div class="hero__stage">
+        <div class="hero__canvas" :style="canvasStyle">
+          <ClientOnly>
+            <BlackHoleCube :progress="progress" />
+          </ClientOnly>
+        </div>
+        <div class="hero__veil" />
 
-      <div class="hero__content">
-        <h1 class="hero__title" data-reveal>
-          The ORM that<br />
-          <span class="hero__grad">outruns Prisma.</span>
-        </h1>
+        <div class="hero__content" :style="contentStyle">
+          <h1 class="hero__title" data-reveal>
+            The ORM that<br />
+            <span class="hero__grad">outruns Prisma.</span>
+          </h1>
 
-        <p class="hero__sub" data-reveal>
-          A type-safe, Rust-powered query engine for MySQL, PostgreSQL, SQLite,
-          MongoDB &amp; Turso. <strong>Write once, run anywhere</strong> — local or
-          in the cloud, the same API and the fastest path to your data.
-        </p>
+          <p class="hero__sub" data-reveal>
+            A type-safe, Rust-powered query engine for MySQL, PostgreSQL, SQLite,
+            MongoDB &amp; Turso. <strong>Write once, run anywhere</strong> — local or
+            in the cloud, the same API and the fastest path to your data.
+          </p>
 
-        <div class="hero__cta" data-reveal>
-          <NuxtLink to="/getting-started/installation" class="btn btn--primary">
-            Get started →
-          </NuxtLink>
-          <a href="https://github.com/Dbcube" target="_blank" class="btn btn--ghost">
-            Star on GitHub
-          </a>
+          <div class="hero__cta" data-reveal>
+            <NuxtLink to="/getting-started/installation" class="btn btn--primary">
+              Get started →
+            </NuxtLink>
+            <a href="https://github.com/Dbcube" target="_blank" class="btn btn--ghost">
+              Star on GitHub
+            </a>
+          </div>
+
+          <div class="hero__install" data-reveal>
+            <code><span class="hero__dollar">$</span> npm install dbcube</code>
+          </div>
         </div>
 
-        <div class="hero__install" data-reveal>
-          <code><span class="hero__dollar">$</span> npm install dbcube</code>
-        </div>
+        <div class="hero__scroll" aria-hidden="true">↓ scroll</div>
       </div>
-
-      <div class="hero__scroll" aria-hidden="true">↓ scroll</div>
     </section>
 
     <!-- ════════ STAT BAND ════════ -->
@@ -217,20 +265,14 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 }
 [data-reveal].is-visible { opacity: 1; transform: none; }
 
-/* ── HERO (pantalla completa, siempre oscuro: el cubo necesita fondo negro) ── */
+/* ── HERO ──
+   `.hero` es un TRACK alto: da la distancia de scroll para la animación.
+   `.hero__stage` queda pineado (sticky) y ocupa la pantalla mientras el track
+   se recorre; el progreso del scroll controla la entrada del cubo al chip. */
 .hero {
   position: relative;
   width: 100vw;
-  /* llena toda la pantalla visible justo debajo del header */
-  height: calc(100vh - var(--ui-header-height, 4rem));
-  min-height: 520px;
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  justify-content: center;
-  text-align: left;
-  overflow: hidden;
-  padding: 0 clamp(1.5rem, 7vw, 8rem);
+  height: 260vh; /* track: distancia de scroll para las 2 fases (cubo + placa) */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #04060a;
   --fg: #eef3f8;
@@ -239,6 +281,21 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
   --border: rgba(255, 255, 255, 0.1);
   background: #000;
   color: var(--fg);
+}
+.hero__stage {
+  position: sticky;
+  top: var(--ui-header-height, 4rem);
+  height: calc(100vh - var(--ui-header-height, 4rem));
+  min-height: 520px;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  text-align: left;
+  overflow: hidden;
+  padding: 0 clamp(1.5rem, 7vw, 8rem);
+  background: #000;
 }
 /* Escena 3D corrida a la derecha y subida ~10% (sin tocar los parámetros 3D);
    el área que queda expuesta a la izquierda/abajo es negra = fondo del hero. */

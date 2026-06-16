@@ -2,10 +2,12 @@
 @import "@nuxt/ui";
 
 /* El home rompe el contenedor con width:100vw; 100vw incluye el ancho de la
-   barra de scroll vertical → genera scroll horizontal. Esto lo elimina. */
+   barra de scroll vertical → genera scroll horizontal. Usamos `clip` (no
+   `hidden`) porque `hidden` crea un scroll-container que ROMPE position:sticky
+   del hero; `clip` recorta igual pero mantiene el sticky funcionando. */
 html,
 body {
-  overflow-x: hidden;
+  overflow-x: clip;
   max-width: 100%;
 }
 

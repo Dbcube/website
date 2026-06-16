@@ -9,6 +9,8 @@ import { RenderPass } from "three/addons/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/addons/postprocessing/UnrealBloomPass.js";
 import { onMounted, onBeforeUnmount } from "vue";
 
+const props = defineProps<{ progress?: number }>();
+
 const canvas = ref<HTMLCanvasElement | null>(null);
 let cleanup: (() => void) | null = null;
 
@@ -30,8 +32,15 @@ onMounted(() => {
   scene.background = new THREE.Color(0x000000);
 
   const camera = new THREE.PerspectiveCamera(35, w / h, 0.1, 100);
-  camera.position.set(10.5, 5, 10.5); // vista isométrica desde arriba
-  camera.lookAt(0, 0.2, 0);
+  // Fase 1: vista isométrica (el cubo entra al chip).
+  // Fase 2: vista casi cenital → la placa se lee como un cuadrado plano centrado.
+  const ISO_POS = new THREE.Vector3(10.5, 5, 10.5);
+  const ISO_TGT = new THREE.Vector3(0, 0.2, 0);
+  const TOP_POS = new THREE.Vector3(0, 14, 2.6);
+  const TOP_TGT = new THREE.Vector3(0, -1, 0);
+  const camTgt = new THREE.Vector3();
+  camera.position.copy(ISO_POS);
+  camera.lookAt(ISO_TGT);
 
   const renderer = new THREE.WebGLRenderer({ canvas: el, antialias: true, alpha: true });
   renderer.setSize(w, h);
@@ -239,7 +248,9 @@ onMounted(() => {
   const GLOW = 0x6fd2ff;
   const SCALE = 0.637;
   const HOVER = 1.4;
-  const cubeBottom = () => cube.position.y - outerHalf * SCALE;
+  // base real del cubo usando su escala ACTUAL (cambia con el scroll) → los tubos
+  // siguen la base y se acortan/jalan a medida que el cubo encoge y baja.
+  const cubeBottom = () => cube.position.y - outerHalf * cube.scale.x;
 
   scene.fog = new THREE.FogExp2(0x000000, 0.012);
 
@@ -280,16 +291,21 @@ onMounted(() => {
     }
   }
 
-  function updateBridges(topY: number) {
+  // `k` = escala actual del cubo / SCALE. Los enganches del lado del cubo
+  // (c.cube) se acercan al centro conforme el cubo encoge → los tubos siguen
+  // la base que se achica en vez de quedarse anchos.
+  function updateBridges(topY: number, k = 1) {
     const bottomY = BOARD_TOP_Y + 0.01;
     for (let i = 0; i < bridges.length; i++) {
       const c = bridgeConns[i];
+      const cx = c.cube[0] * k;
+      const cz = c.cube[1] * k;
       const stepY = bottomY + (topY - bottomY) * (0.4 + (i % 3) * 0.12);
       const pts = [
         new THREE.Vector3(c.chip[0], bottomY, c.chip[1]),
         new THREE.Vector3(c.chip[0], stepY, c.chip[1]),
-        new THREE.Vector3(c.cube[0], stepY, c.cube[1]),
-        new THREE.Vector3(c.cube[0], topY, c.cube[1]),
+        new THREE.Vector3(cx, stepY, cz),
+        new THREE.Vector3(cx, topY, cz),
       ];
       const curve = new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.4);
       bridgeCurves[i] = curve;
@@ -330,9 +346,32 @@ onMounted(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
     elapsed += dt;
 
-    cube.position.y = HOVER + Math.sin(elapsed * 1.2) * 0.12;
+    // Scrollytelling en 2 fases:
+    //  Fase 1 (0 → PHASE1): el cubo desciende, encoge y se posa en el chip.
+    //  Fase 2 (PHASE1 → 1): la cámara pasa a vista cenital → la placa se ve como
+    //  un cuadrado plano centrado (sección "placa incrustada").
+    const p = Math.min(Math.max(props.progress ?? 0, 0), 1);
+    const PHASE1 = 0.45;
+    const p1 = Math.min(p / PHASE1, 1);
+    const p2 = Math.max((p - PHASE1) / (1 - PHASE1), 0);
+    const e = p1 * p1 * (3 - 2 * p1); // smoothstep fase 1
+    const e2 = p2 * p2 * (3 - 2 * p2); // smoothstep fase 2
 
-    updateBridges(cubeBottom());
+    const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
+    const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
+    const scaleNow = SCALE * (1 - (1 - MIN_RATIO) * e);
+    cube.scale.setScalar(scaleNow);
+    const halfMin = outerHalf * SCALE * MIN_RATIO; // semialtura del cubo en su tamaño mínimo
+    const restY = BOARD_TOP_Y - SINK + halfMin; // centro al quedar posado (carita sobresale)
+    const hoverY = HOVER + Math.sin(elapsed * 1.2) * 0.12 * (1 - p1); // el bob se apaga
+    cube.position.y = hoverY + (restY - hoverY) * e;
+
+    // Fase 2: cámara isométrica → cenital (la placa se vuelve un cuadrado plano)
+    camera.position.lerpVectors(ISO_POS, TOP_POS, e2);
+    camTgt.lerpVectors(ISO_TGT, TOP_TGT, e2);
+    camera.lookAt(camTgt);
+
+    updateBridges(cubeBottom(), scaleNow / SCALE);
 
     for (const pl of pulses) {
       const curve = bridgeCurves[pl.bridge];

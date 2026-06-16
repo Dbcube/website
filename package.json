@@ -11,10 +11,12 @@
     "docus": "latest",
     "mermaid": "^11.15.0",
     "nuxt": "^4.2.0",
+    "three": "^0.184.0",
     "vuetify": "^3.10.7"
   },
   "devDependencies": {
     "@types/node": "^24.9.1",
+    "@types/three": "^0.184.0",
     "typescript": "^5.9.3"
   }
 }

@@ -7,13 +7,12 @@ const toast = useToast();
 const logoElement = ref<HTMLElement | null>(null);
 const mobileMenuOpen = ref(false);
 
-// Enlaces de navegación principales
+// Enlaces de navegación principales (rutas reales de la documentación)
 const navLinks = [
-  { label: "Showcase", to: "/showcase" },
-  { label: "Docs", to: "/docs" },
-  { label: "Blog", to: "/blog" },
-  { label: "Templates", to: "/templates" },
-  { label: "Enterprise", to: "/enterprise" },
+  { label: "Docs", to: "/getting-started/introduction" },
+  { label: "Performance", to: "/performance/overview" },
+  { label: "Examples", to: "/examples/overview" },
+  { label: "CLI", to: "/cli/overview" },
 ];
 
 // Logo según el tema (reactivo e instantáneo)
@@ -79,9 +78,9 @@ const logoContextMenuItems = [
 
 <template>
   <header
-    class="sticky top-0 z-50 w-full bg-white/80 dark:bg-black backdrop-blur-md border-b border-gray-200 dark:border-gray-600/80"
+    class="sticky top-0 z-50 w-full bg-white/70 dark:bg-black/70 backdrop-blur-xl border-b border-gray-200 dark:border-white/10"
   >
-    <div class="container mx-auto flex h-14 items-center justify-between px-6">
+    <div class="container mx-auto flex h-16 items-center justify-between px-6">
       <!-- Logo + Navegación (izquierda) -->
       <div class="flex items-center gap-8">
         <!-- Logo -->
@@ -114,17 +113,26 @@ const logoContextMenuItems = [
         <!-- Buscador (icono) -->
         <UContentSearchButton />
 
-        <!-- Botón de tema (Sol/Luna) -->
-        <ClientOnly>
-          <UColorModeButton size="sm" />
-          <template #fallback>
-            <div class="h-8 w-8 animate-pulse bg-gray-200 dark:bg-gray-800 rounded-md" />
-          </template>
-        </ClientOnly>
+        <!-- GitHub -->
+        <UButton
+          to="https://github.com/Dbcube"
+          target="_blank"
+          color="neutral"
+          variant="ghost"
+          size="sm"
+          icon="i-simple-icons-github"
+          class="hidden md:inline-flex"
+        />
 
-        <!-- Botón Learn -->
-        <UButton color="primary" variant="solid" size="sm" class="hidden md:inline-flex">
-          Learn
+        <!-- CTA principal -->
+        <UButton
+          to="/getting-started/installation"
+          color="primary"
+          variant="solid"
+          size="sm"
+          class="hidden md:inline-flex font-semibold"
+        >
+          Get started
         </UButton>
 
         <!-- Menú hamburguesa (móvil) -->
@@ -160,8 +168,8 @@ const logoContextMenuItems = [
           {{ link.label }}
         </NuxtLink>
         <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-200 dark:border-gray-800">
-          <UButton color="primary" variant="solid" size="sm" block>
-            Learn
+          <UButton to="/getting-started/installation" color="primary" variant="solid" size="sm" block>
+            Get started
           </UButton>
         </div>
       </nav>

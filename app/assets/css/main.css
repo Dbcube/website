@@ -1,34 +1,41 @@
 @import "tailwindcss";
 @import "@nuxt/ui";
 
+/* El home rompe el contenedor con width:100vw; 100vw incluye el ancho de la
+   barra de scroll vertical → genera scroll horizontal. Esto lo elimina. */
+html,
+body {
+  overflow-x: hidden;
+  max-width: 100%;
+}
+
 @theme static {
-  --font-sans: 'Public Sans', sans-serif;
+  --font-sans: "Public Sans", sans-serif;
   --ui-container: 90rem;
 }
 
 /* Modo claro */
 :root {
   --ui-primary: #2b9180;
-  --ui-bg: #ffffff;  
-  --ui-text: #000000;    
+  --ui-bg: #ffffff;
+  --ui-text: #000000;
 }
 
 /* Modo oscuro */
 html.dark {
   --ui-primary: #51fbde;
-  --ui-bg: #050505;    
-  --ui-text: #ffffff;    
+  --ui-bg: #050505;
+  --ui-text: #ffffff;
 }
 
-
-header{
+header {
   background-color: transparent;
 }
 
-#__nuxt > header > div{
+#__nuxt > header > div {
   backdrop-filter: blur(16px);
 }
 
-html.dark > header > div{
-  background-color: oklab(0 none none / .65);
+html.dark > header > div {
+  background-color: oklab(0 none none / 0.65);
 }

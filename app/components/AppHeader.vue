@@ -74,13 +74,29 @@ const logoContextMenuItems = [
     },
   ],
 ];
+
+// Header flotante (isla) arriba → barra completa al hacer scroll.
+const scrolled = ref(false);
+let onScroll: (() => void) | null = null;
+onMounted(() => {
+  onScroll = () => { scrolled.value = window.scrollY > 24; };
+  onScroll();
+  window.addEventListener("scroll", onScroll, { passive: true });
+});
+onBeforeUnmount(() => {
+  if (onScroll) window.removeEventListener("scroll", onScroll);
+});
 </script>
 
 <template>
-  <header
-    class="sticky top-0 z-50 w-full bg-white/70 dark:bg-black/70 backdrop-blur-xl border-b border-gray-200 dark:border-white/10"
-  >
-    <div class="container mx-auto flex h-16 items-center justify-between px-6">
+  <header class="sticky top-0 z-50 w-full h-16">
+    <!-- Isla flotante arriba; al hacer scroll se expande a barra completa -->
+    <div
+      class="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-between gap-4 backdrop-blur-xl transition-all duration-300 ease-out"
+      :class="scrolled
+        ? 'top-0 h-16 w-full rounded-none border-b border-gray-200 dark:border-white/10 bg-white/75 dark:bg-black/70 px-6'
+        : 'top-3 h-12 w-[min(64rem,calc(100%-2rem))] rounded-2xl border border-gray-200 dark:border-white/10 bg-white/85 dark:bg-black/55 px-5 shadow-xl shadow-black/40'"
+    >
       <!-- Logo + Navegación (izquierda) -->
       <div class="flex items-center gap-8">
         <!-- Logo -->
@@ -155,7 +171,7 @@ const logoContextMenuItems = [
     <!-- Menú móvil -->
     <div
       v-if="mobileMenuOpen"
-      class="md:hidden border-t border-gray-200 dark:border-gray-800 bg-white dark:bg-black"
+      class="md:hidden absolute top-16 inset-x-0 z-10 border-y border-gray-200 dark:border-white/10 bg-white dark:bg-black/95 backdrop-blur-xl"
     >
       <nav class="container mx-auto flex flex-col px-6 py-4 gap-3">
         <NuxtLink

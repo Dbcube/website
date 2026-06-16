@@ -159,13 +159,13 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
         <div class="hero__content" :style="contentStyle">
           <h1 class="hero__title" data-reveal>
             The ORM that<br />
-            <span class="hero__grad">outruns Prisma.</span>
+            <span class="hero__grad">outruns them all.</span>
           </h1>
 
           <p class="hero__sub" data-reveal>
-            A type-safe, Rust-powered query engine for MySQL, PostgreSQL, SQLite,
-            MongoDB &amp; Turso. <strong>Write once, run anywhere</strong> — local or
-            in the cloud, the same API and the fastest path to your data.
+            A type-safe, Rust-powered engine for PostgreSQL, MySQL, SQLite,
+            MongoDB &amp; Turso. <strong>One API for every database</strong> — and the
+            shortest path from your code to your data.
           </p>
 
           <div class="hero__cta" data-reveal>

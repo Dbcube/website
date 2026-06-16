@@ -128,6 +128,8 @@ onMounted(() => {
   const BOARD_TOP_Y = -1.35;
 
   // ── Placa de circuito (GLB comprimido con Draco + texturas WebP) ──
+  let boardObj: THREE.Object3D | null = null; // ref para bajarla en la fase 4
+  let boardBaseY = 0;
   const loader = new GLTFLoader();
   const draco = new DRACOLoader();
   draco.setDecoderPath("/draco/"); // decoder servido localmente desde public/draco
@@ -217,6 +219,8 @@ onMounted(() => {
       board.position.y += BOARD_TOP_Y - box.max.y;
 
       scene.add(board);
+      boardObj = board;
+      boardBaseY = board.position.y;
       box = new THREE.Box3().setFromObject(board);
       ground.position.y = box.min.y - 0.01;
     },
@@ -304,18 +308,31 @@ onMounted(() => {
   // `k` = escala actual del cubo / SCALE. Los enganches del lado del cubo
   // (c.cube) se acercan al centro conforme el cubo encoge → los tubos siguen
   // la base que se achica en vez de quedarse anchos.
-  function updateBridges(topY: number, k = 1) {
-    const bottomY = BOARD_TOP_Y + 0.01;
+  // fallT 0→1: el extremo del lado del cubo se SUELTA y cae a un punto disperso de
+  // la placa (el tubo queda drapeado sobre ella, unido al chip pero no al cubo).
+  // dropY: desplazamiento vertical (la placa y sus tubos bajan en la fase 4).
+  function updateBridges(topY: number, k = 1, fallT = 0, dropY = 0) {
+    const lp = (a: number, b: number, t: number) => a + (b - a) * t;
+    const bottomY = BOARD_TOP_Y + 0.01 + dropY;
     for (let i = 0; i < bridges.length; i++) {
       const c = bridgeConns[i];
-      const cx = c.cube[0] * k;
-      const cz = c.cube[1] * k;
-      const stepY = bottomY + (topY - bottomY) * (0.4 + (i % 3) * 0.12);
+      const ft = fallTargets[i];
+      const cubeX = c.cube[0] * k, cubeZ = c.cube[1] * k;
+      const fallX = ft.x, fallZ = ft.z, fallY = BOARD_TOP_Y + 0.03 + dropY;
+      // extremo final: del cubo (conectado) → punto caído en la placa
+      const endX = lp(cubeX, fallX, fallT);
+      const endY = lp(topY, fallY, fallT);
+      const endZ = lp(cubeZ, fallZ, fallT);
+      // altura del quiebre: alto cuando conectado, bajo (drapeado) al caer
+      const stepHi = bottomY + (topY - bottomY) * (0.4 + (i % 3) * 0.12);
+      const stepY = lp(stepHi, bottomY + 0.12, fallT);
+      const midX = lp(cubeX, (c.chip[0] + fallX) / 2, fallT);
+      const midZ = lp(cubeZ, (c.chip[1] + fallZ) / 2, fallT);
       const pts = [
         new THREE.Vector3(c.chip[0], bottomY, c.chip[1]),
         new THREE.Vector3(c.chip[0], stepY, c.chip[1]),
-        new THREE.Vector3(cx, stepY, cz),
-        new THREE.Vector3(cx, topY, cz),
+        new THREE.Vector3(midX, stepY, midZ),
+        new THREE.Vector3(endX, endY, endZ),
       ];
       const curve = new THREE.CatmullRomCurve3(pts, false, "catmullrom", 0.4);
       bridgeCurves[i] = curve;
@@ -328,11 +345,30 @@ onMounted(() => {
   // Puntos de impacto en el chip
   const dotGeo = new THREE.SphereGeometry(0.03, 10, 10);
   const dotMat = new THREE.MeshBasicMaterial({ color: 0xeaf6ff });
+  const dotMeshes: THREE.Mesh[] = [];
   for (const c of bridgeConns) {
     const d = new THREE.Mesh(dotGeo, dotMat);
     d.position.set(c.chip[0], BOARD_TOP_Y + 0.02, c.chip[1]);
     scene.add(d);
+    dotMeshes.push(d);
   }
+
+  // ── FASE 4: los tubos se sueltan del cubo y CAEN dispersos sobre la placa
+  // (siguen unidos al chip), donde chispean; luego la placa baja y desaparece.
+  const fallTargets = bridgeConns.map((c) => ({
+    x: c.cube[0] * 1.5 + (Math.random() - 0.5) * 1.4,
+    z: c.cube[1] * 1.5 + (Math.random() - 0.5) * 1.4,
+  }));
+  const sparkGeo = new THREE.SphereGeometry(0.055, 6, 6);
+  const sparks = fallTargets.map((ft) => {
+    const mat = new THREE.MeshBasicMaterial({ color: 0xeaf6ff, transparent: true, opacity: 0 });
+    mat.toneMapped = false; // chispa muy brillante → resalta con el bloom
+    const s = new THREE.Mesh(sparkGeo, mat);
+    s.position.set(ft.x, BOARD_TOP_Y + 0.05, ft.z);
+    s.visible = false;
+    scene.add(s);
+    return s;
+  });
 
   // NOTA: la sección 2 (tubos + cajas de bases de datos) ahora es un overlay
   // HTML/SVG en HomeLanding (ángulos rectos perfectos, logos nítidos, leyendas).
@@ -360,16 +396,19 @@ onMounted(() => {
     const dt = Math.min(clock.getDelta(), 0.05);
     elapsed += dt;
 
-    // Scrollytelling en 3 fases (mismos umbrales que HomeLanding):
-    //  1) cubo entra al chip   2) placa se aplana/encoge + bases de datos (HTML)
-    //  3) STATS: la cámara va a vista angular, el cubo RE-EMERGE y flota.
+    // Scrollytelling en 4 fases (mismos umbrales que HomeLanding):
+    //  1) cubo→chip  2) placa aplana/encoge + bases de datos  3) stats (cubo re-emerge)
+    //  4) los tubos se sueltan y caen+chispean, la placa baja y el cubo queda libre.
     const p = Math.min(Math.max(props.progress ?? 0, 0), 1);
     const seg = (a: number, b: number) => Math.min(Math.max((p - a) / (b - a), 0), 1);
     const ss = (x: number) => x * x * (3 - 2 * x);
-    const cubeIn = seg(0, 0.26);
-    const eFlat = ss(seg(0.3, 0.45));
-    const eShrink = ss(seg(0.45, 0.53));
-    const eStats = ss(seg(0.78, 0.9)); // el movimiento arranca DESPUÉS de retraer los tubos
+    const cubeIn = seg(0, 0.18);
+    const eFlat = ss(seg(0.22, 0.34));
+    const eShrink = ss(seg(0.34, 0.4));
+    const eStats = ss(seg(0.6, 0.68)); // cámara angular + cubo re-emerge
+    const separate = ss(seg(0.78, 0.86)); // los tubos se sueltan del cubo y caen
+    const boardDown = ss(seg(0.9, 0.96)); // la placa (y sus tubos) baja y desaparece
+    const dropY = -16 * boardDown;
 
     const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
     const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
@@ -381,11 +420,11 @@ onMounted(() => {
     let cubeY = hoverY + (restY - hoverY) * e;
     // FASE 3: el cubo re-emerge del chip, crece y vuelve a flotar
     if (eStats > 0) {
-      cubeScale = THREE.MathUtils.lerp(cubeScale, SCALE * 0.72, eStats);
+      cubeScale = THREE.MathUtils.lerp(cubeScale, SCALE * 0.95, eStats);
       cubeY = THREE.MathUtils.lerp(cubeY, 1.7 + Math.sin(elapsed * 1.0) * 0.12, eStats);
     }
     cube.scale.setScalar(cubeScale);
-    cube.position.y = cubeY;
+    cube.position.y = cubeY + separate * 0.4; // al soltarse, el cubo sube un poco
 
     // Cámara: ISO → cenital (aplana) → se aleja (encoge) → angular (stats)
     camera.position.lerpVectors(ISO_POS, TOP_POS, eFlat);
@@ -395,7 +434,20 @@ onMounted(() => {
     if (eStats > 0) camTgt.lerpVectors(TOP_TGT, STATS_TGT, eStats);
     camera.lookAt(camTgt);
 
-    updateBridges(cubeBottom(), cubeScale / SCALE);
+    // FASE 4: tubos caen (separate) y todo lo de la placa baja (dropY)
+    updateBridges(cubeBottom(), cubeScale / SCALE, separate, dropY);
+    if (boardObj) boardObj.position.y = boardBaseY + dropY;
+    for (const d of dotMeshes) d.position.y = BOARD_TOP_Y + 0.02 + dropY;
+    // chispas: SOLO cuando los tubos ya aterrizaron (separate completo) y antes de
+    // que la placa baje del todo; no aparecen durante la caída.
+    const sparking = separate > 0.96 && boardDown < 0.7;
+    for (const s of sparks) {
+      s.visible = sparking;
+      s.position.y = BOARD_TOP_Y + 0.05 + dropY;
+      (s.material as THREE.MeshBasicMaterial).opacity = sparking
+        ? Math.random() * 0.9 * (1 - boardDown)
+        : 0;
+    }
 
     for (const pl of pulses) {
       const curve = bridgeCurves[pl.bridge];

@@ -38,31 +38,36 @@ onBeforeUnmount(() => {
   }
 });
 
-// ── Scrollytelling en 3 fases (mismos umbrales que BlackHoleCube) ──
-//  F1 cubo→chip (0–0.26) · F2 aplanar (0.30–0.45)+encoger(0.45–0.53)+bases(0.55–0.66)
-//  · F3 stats (0.70–1): el cubo re-emerge, la placa se inclina, aparecen los datos.
+// ── Scrollytelling en 4 fases (mismos umbrales que BlackHoleCube) ──
+//  F1 cubo→chip (0–0.18) · F2 aplanar(0.22–0.36)+encoger+bases(0.43–0.60)
+//  F3 stats (0.60–0.78) · F4 (0.80–1) tubos caen+chispean, placa baja, cubo→izq + terminal.
 const seg = (a: number, b: number) => Math.min(Math.max((progress.value - a) / (b - a), 0), 1);
-const flatten = computed(() => seg(0.28, 0.48)); // la placa se acomoda
-// Transición F2→F3 en orden: (1) los tubos se RETRAEN, (2) la cámara/cubo se
-// mueven (en el componente 3D, 0.78–0.90), (3) aparecen los números (0.88+).
-const dbDrawIn = computed(() => seg(0.55, 0.63)); // los tubos se dibujan
-const dbRetract = computed(() => seg(0.69, 0.77)); // los tubos se retraen (reversa)
+const flatten = computed(() => seg(0.22, 0.36)); // la placa se acomoda
+const dbDrawIn = computed(() => seg(0.43, 0.5)); // los tubos se dibujan
+const dbRetract = computed(() => seg(0.54, 0.6)); // los tubos se retraen (reversa)
 const dashFactor = computed(() => 1 - dbDrawIn.value - dbRetract.value); // 1→0 (dibuja) → -1 (retrae)
-const statsIn = computed(() => seg(0.88, 0.96)); // los números aparecen ya posicionado
+const statsIn = computed(() => seg(0.69, 0.76)); // los números aparecen ya posicionado
+const statsOut = computed(() => seg(0.79, 0.84)); // los números se van al iniciar la fase 4
+const cubeLeftT = computed(() => seg(0.93, 1)); // el cubo se va a la izquierda
+const terminalIn = computed(() => seg(0.94, 1)); // aparece el terminal a la derecha
 
-// canvas: de translate(25%,-7%) → (0,0) (se centra mientras se acomoda)
+// canvas: centra al acomodarse y, en F4, se desplaza a la IZQUIERDA (cubo a la izq)
 const canvasStyle = computed(() => {
   const k = 1 - flatten.value;
-  return { transform: `translate(${25 * k}%, ${-7 * k}%)` };
+  // en F4 el canvas baja un poco para centrar el cubo con la sección del terminal
+  return { transform: `translate(${25 * k - 16 * cubeLeftT.value}%, ${-7 * k + 20 * cubeLeftT.value}%)` };
 });
 // banner: sube y se va mientras la placa se acomoda
 const contentStyle = computed(() => ({
   transform: `translate(30%, ${-flatten.value * 60}vh)`,
   opacity: 1 - Math.min(flatten.value * 1.4, 1),
 }));
+// veil: solo hace falta en la fase 1 (texto sobre la izquierda); se desvanece
+// con el banner para no opacar el cubo/placa después.
+const veilStyle = computed(() => ({ opacity: 1 - flatten.value }));
 // título "One core, every database": entra con las bases de datos y se va al retraer
 const section2Style = computed(() => ({
-  opacity: seg(0.54, 0.63) * (1 - seg(0.69, 0.77)),
+  opacity: seg(0.45, 0.5) * (1 - seg(0.54, 0.6)),
 }));
 
 // FASE 3 — stats de rendimiento (4 datos a los lados del cubo flotante)
@@ -72,7 +77,13 @@ const STATS = [
   { num: "5", label: "databases, one API", x: 85, y: 33 },
   { num: "1", label: "round-trip transaction", x: 85, y: 66 },
 ];
-const statsStyle = computed(() => ({ opacity: statsIn.value }));
+const statsStyle = computed(() => ({ opacity: statsIn.value * (1 - statsOut.value) }));
+
+// FASE 4 — terminal "See it move" a la derecha (el cubo queda a la izquierda)
+const terminalStyle = computed(() => ({
+  opacity: terminalIn.value,
+  pointerEvents: terminalIn.value > 0.6 ? "auto" : "none",
+}));
 
 // ── Overlay HTML/SVG de las bases de datos (sobre el canvas, ángulos rectos) ──
 const stageEl = ref<HTMLElement | null>(null);
@@ -113,9 +124,9 @@ const connectors = computed(() => {
 });
 // Tubos: visibles mientras se dibujan y se retraen (la geometría hace el efecto,
 // la opacidad solo limpia al final). Cajas/pulsos se ocultan durante la retracción.
-const dbnetOpacity = computed(() => dbDrawIn.value * (1 - seg(0.78, 0.82)));
-const pulseOpacity = computed(() => seg(0.61, 0.69) * (1 - seg(0.69, 0.73)));
-const boxOpacity = computed(() => seg(0.59, 0.67) * (1 - seg(0.69, 0.75)));
+const dbnetOpacity = computed(() => dbDrawIn.value * (1 - seg(0.6, 0.63)));
+const pulseOpacity = computed(() => seg(0.49, 0.54) * (1 - seg(0.54, 0.57)));
+const boxOpacity = computed(() => seg(0.47, 0.53) * (1 - seg(0.54, 0.59)));
 
 // Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
 let observer: IntersectionObserver | null = null;
@@ -167,7 +178,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
             <BlackHoleCube :progress="progress" />
           </ClientOnly>
         </div>
-        <div class="hero__veil" />
+        <div class="hero__veil" :style="veilStyle" />
 
         <div class="hero__content" :style="contentStyle">
           <h1 class="hero__title" data-reveal>
@@ -257,6 +268,15 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
             <div class="statcard__lbl">{{ s.label }}</div>
           </div>
         </div>
+
+        <!-- FASE 4: terminal "See it move" a la derecha (el cubo queda a la izquierda) -->
+        <div class="hero__playground" :style="terminalStyle">
+          <div class="pg__head">
+            <h2 class="s2__title">See it <span class="hero__grad">move</span></h2>
+            <p class="s2__sub">The same fluent API for reads, writes, transactions and the CLI.</p>
+          </div>
+          <PlaygroundTerminal />
+        </div>
       </div>
     </section>
 
@@ -282,16 +302,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
       </div>
     </section>
 
-    <!-- ════════ PLAYGROUND ════════ -->
-    <section class="block">
-      <div class="block__head" data-reveal>
-        <h2 class="block__title">See it move</h2>
-        <p class="block__sub">The same fluent API for reads, writes, transactions and the CLI.</p>
-      </div>
-      <div class="playground" data-reveal>
-        <PlaygroundTerminal />
-      </div>
-    </section>
+    <!-- (La sección "See it move" ahora vive en la fase 4 del hero) -->
 
     <!-- ════════ FEATURES ════════ -->
     <section class="block">
@@ -397,7 +408,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .hero {
   position: relative;
   width: 100vw;
-  height: 520vh; /* track: 3 fases — cubo→chip, placa+bases de datos, y stats */
+  height: 680vh; /* track: 4 fases — cubo→chip, placa+bases, stats, y dispersión+terminal */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #04060a;
   --fg: #eef3f8;
@@ -550,6 +561,19 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
   background: linear-gradient(120deg, var(--cyan), #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .statcard__lbl { margin-top: 0.45rem; color: #cfe8f2; font-size: clamp(0.82rem, 1.4vw, 0.98rem); }
+
+/* Fase 4 — terminal "See it move" a la derecha */
+.hero__playground {
+  position: absolute; top: 50%; left: 50%; transform: translateY(-50%);
+  width: min(42%, 38rem); z-index: 4;
+  display: flex; flex-direction: column; gap: 1rem;
+}
+.pg__head { text-align: left; }
+.pg__head .s2__title { font-size: clamp(1.6rem, 3.5vw, 2.6rem); }
+.pg__head .s2__sub { margin-top: 0.3rem; }
+@media (max-width: 860px) {
+  .hero__playground { position: absolute; left: 5%; right: 5%; width: auto; top: 54%; }
+}
 
 /* ── STATS ── */
 .stats { padding: 4rem 1.5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }

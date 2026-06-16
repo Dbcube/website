@@ -38,20 +38,69 @@ onBeforeUnmount(() => {
   }
 });
 
-// Fase 2 del scroll (debe coincidir con PHASE1 del componente 3D = 0.45):
-// el canvas vuelve al centro y el título sube y se desvanece.
+// Fase 2 del scroll (coincide con PHASE1 del componente 3D = 0.45), subdividida:
+//  settle (0→0.5): la placa se ACOMODA (cenital), el banner se va, el canvas centra.
+//  reveal (0.5→1): aparecen tubos/iconos y, ya acomodada, el TÍTULO de sección.
 const PHASE1 = 0.45;
 const phase2 = computed(() => Math.max((progress.value - PHASE1) / (1 - PHASE1), 0));
-// canvas: de translate(25%,-7%) → (0,0) (se centra al volverse cuadrado)
+const settle = computed(() => Math.min(phase2.value / 0.5, 1));
+const reveal = computed(() => Math.max((phase2.value - 0.5) / 0.5, 0));
+// canvas: de translate(25%,-7%) → (0,0) (se centra mientras se acomoda)
 const canvasStyle = computed(() => {
-  const k = 1 - phase2.value;
+  const k = 1 - settle.value;
   return { transform: `translate(${25 * k}%, ${-7 * k}%)` };
 });
-// título: mantiene su posición en fase 1 y "continúa su recorrido" (sube y se va) en fase 2
+// banner: "continúa su recorrido" (sube y se va) mientras la placa se acomoda
 const contentStyle = computed(() => ({
-  transform: `translate(30%, ${-phase2.value * 60}vh)`,
-  opacity: 1 - Math.min(phase2.value * 1.4, 1),
+  transform: `translate(30%, ${-settle.value * 60}vh)`,
+  opacity: 1 - Math.min(settle.value * 1.4, 1),
 }));
+// título de la sección 2: aparece SOLO después de que la placa ya se acomodó
+const section2Style = computed(() => ({
+  opacity: Math.min(Math.max((reveal.value - 0.15) / 0.5, 0), 1),
+}));
+
+// ── Overlay HTML/SVG de las bases de datos (sobre el canvas, ángulos rectos) ──
+const stageEl = ref<HTMLElement | null>(null);
+const stageW = ref(1280);
+const stageH = ref(720);
+let stageRO: ResizeObserver | null = null;
+onMounted(() => {
+  const el = stageEl.value;
+  if (!el) return;
+  const measure = () => { stageW.value = el.clientWidth; stageH.value = el.clientHeight; };
+  measure();
+  stageRO = new ResizeObserver(measure);
+  stageRO.observe(el);
+});
+onBeforeUnmount(() => stageRO?.disconnect());
+
+const DBNET = [
+  { logo: "/logos/postgresql.svg", label: "PostgreSQL", hx: -1, hy: -1 },
+  { logo: "/logos/mysql.svg", label: "MySQL", hx: 1, hy: -1 },
+  { logo: "/logos/mongodb.svg", label: "MongoDB", hx: -1, hy: 1 },
+  { logo: "/logos/sqlite.svg", label: "SQLite", hx: 1, hy: 1 },
+];
+// Conectores en ángulo recto (horizontal → vertical → horizontal) del borde de
+// la placa a cada caja; coords en px del stage → líneas rectas y puntos redondos.
+const connectors = computed(() => {
+  const W = stageW.value, H = stageH.value, bh = 48;
+  return DBNET.map((d) => {
+    const bx = W * (0.5 + d.hx * 0.3), by = H * (0.5 + d.hy * 0.27); // centro de la caja (más cerca)
+    const sx = W * (0.5 + d.hx * 0.1), sy = H * (0.5 + d.hy * 0.14); // arranca en el borde de la placa
+    const p1x = W * (0.5 + d.hx * 0.2), p1y = sy; // 1) horizontal
+    const p2x = p1x, p2y = by; // 2) vertical
+    const p3x = bx - d.hx * bh, p3y = by; // 3) horizontal corto → caja
+    const dStr = `M ${sx} ${sy} L ${p1x} ${p1y} L ${p2x} ${p2y} L ${p3x} ${p3y}`;
+    const len =
+      Math.hypot(p1x - sx, p1y - sy) + Math.hypot(p2x - p1x, p2y - p1y) + Math.hypot(p3x - p2x, p3y - p2y);
+    return { ...d, bx, by, d: dStr, len };
+  });
+});
+const drawT = computed(() => Math.min(reveal.value * 1.35, 1)); // dibujado de los tubos
+const dbnetOpacity = computed(() => Math.min(reveal.value * 2, 1));
+const pulseOpacity = computed(() => Math.min(Math.max((reveal.value - 0.35) / 0.4, 0), 1));
+const boxOpacity = computed(() => Math.min(Math.max((reveal.value - 0.5) / 0.4, 0), 1));
 
 // Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
 let observer: IntersectionObserver | null = null;
@@ -97,7 +146,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
   <div class="dbx" :class="{ 'dbx--dark': isDark }">
     <!-- ════════ HERO (track alto; el stage se queda pineado durante el scroll) ════════ -->
     <section ref="heroEl" class="hero">
-      <div class="hero__stage">
+      <div ref="stageEl" class="hero__stage">
         <div class="hero__canvas" :style="canvasStyle">
           <ClientOnly>
             <BlackHoleCube :progress="progress" />
@@ -132,6 +181,51 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
         </div>
 
         <div class="hero__scroll" aria-hidden="true">↓ scroll</div>
+
+        <!-- Overlay HTML/SVG: tubos en ángulo recto + cajas de bases de datos -->
+        <div class="dbnet" aria-hidden="true">
+          <svg class="dbnet__svg" :viewBox="`0 0 ${stageW} ${stageH}`" preserveAspectRatio="none" :style="{ opacity: dbnetOpacity }">
+            <defs>
+              <filter id="dbglow" x="-50%" y="-50%" width="200%" height="200%">
+                <feGaussianBlur stdDeviation="2.5" result="b" />
+                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
+              </filter>
+            </defs>
+            <g filter="url(#dbglow)">
+              <path
+                v-for="(c, i) in connectors"
+                :key="'l' + i"
+                :d="c.d"
+                fill="none"
+                stroke="#7fe0ff"
+                stroke-width="2.5"
+                stroke-linejoin="round"
+                stroke-linecap="round"
+                :stroke-dasharray="c.len"
+                :stroke-dashoffset="c.len * (1 - drawT)"
+              />
+            </g>
+            <circle v-for="(c, i) in connectors" :key="'p' + i" r="4" fill="#ffffff" :opacity="pulseOpacity">
+              <animateMotion :dur="2 + i * 0.35 + 's'" repeatCount="indefinite" :path="c.d" />
+            </circle>
+          </svg>
+
+          <div
+            v-for="(c, i) in connectors"
+            :key="'b' + i"
+            class="dbnet__box"
+            :style="{ left: c.bx + 'px', top: c.by + 'px', opacity: boxOpacity }"
+          >
+            <img :src="c.logo" :alt="c.label" class="dbnet__logo" />
+            <span class="dbnet__label">{{ c.label }}</span>
+          </div>
+        </div>
+
+        <!-- Título de la sección 2 (placa + bases de datos) -->
+        <div class="hero__section2" :style="section2Style">
+          <h2 class="s2__title">One core, <span class="hero__grad">every database</span></h2>
+          <p class="s2__sub">PostgreSQL, MySQL, MongoDB and SQLite — one fluent API, one Rust engine.</p>
+        </div>
       </div>
     </section>
 
@@ -272,7 +366,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .hero {
   position: relative;
   width: 100vw;
-  height: 260vh; /* track: distancia de scroll para las 2 fases (cubo + placa) */
+  height: 340vh; /* track: cubo→chip, placa se acomoda, y aparición de tubos+logos */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #04060a;
   --fg: #eef3f8;
@@ -384,6 +478,34 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
   animation: bob 2s ease-in-out infinite;
 }
 @keyframes bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
+/* Título de la sección 2 (placa incrustada + bases de datos) */
+.hero__section2 {
+  position: absolute; top: 9%; left: 0; right: 0; z-index: 2;
+  text-align: center; padding: 0 1.5rem; pointer-events: none;
+  text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
+}
+.s2__title { font-size: clamp(1.9rem, 4.5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; }
+.s2__sub { color: var(--muted); margin-top: 0.6rem; font-size: clamp(0.95rem, 1.6vw, 1.1rem); }
+
+/* Overlay de bases de datos (HTML/SVG sobre el canvas) */
+.dbnet { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
+.dbnet__svg {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  filter: drop-shadow(0 0 6px rgba(111, 210, 255, 0.55));
+}
+.dbnet__box {
+  position: absolute; transform: translate(-50%, -50%);
+  display: flex; flex-direction: column; align-items: center; gap: 0.45rem;
+  padding: 0.9rem 1rem 0.7rem;
+  border-radius: 16px;
+  border: 1.5px solid color-mix(in srgb, var(--cyan) 55%, transparent);
+  background: rgba(8, 16, 22, 0.55);
+  backdrop-filter: blur(6px);
+  box-shadow: 0 0 22px rgba(111, 210, 255, 0.35), inset 0 0 14px rgba(111, 210, 255, 0.12);
+  transition: opacity 0.25s ease;
+}
+.dbnet__logo { width: 52px; height: 52px; object-fit: contain; display: block; }
+.dbnet__label { font-size: 0.82rem; font-weight: 600; color: #cfe8f2; letter-spacing: 0.01em; }
 
 /* ── STATS ── */
 .stats { padding: 4rem 1.5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }

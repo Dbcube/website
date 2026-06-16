@@ -38,6 +38,7 @@ onMounted(() => {
   const ISO_TGT = new THREE.Vector3(0, 0.2, 0);
   const TOP_POS = new THREE.Vector3(0, 14, 2.6);
   const TOP_TGT = new THREE.Vector3(0, -1, 0);
+  const TOP_FAR = new THREE.Vector3(0, 18.5, 3.4); // reveal: cámara se aleja un poco → placa algo menor
   const camTgt = new THREE.Vector3();
   camera.position.copy(ISO_POS);
   camera.lookAt(ISO_TGT);
@@ -141,6 +142,13 @@ onMounted(() => {
           const mats = Array.isArray(obj.material) ? obj.material : [obj.material];
           mats.forEach((m: any) => {
             if (!m) return;
+            // Forzar la placa OPACA con escritura de profundidad: así ocluye los
+            // tubos de las bases de datos que pasan por debajo (si el GLB trae
+            // alphaMode BLEND, los tubos se verían a través).
+            m.transparent = false;
+            m.depthWrite = true;
+            m.depthTest = true;
+            if ("alphaMode" in m) m.alphaMode = "OPAQUE";
             m.metalnessMap = null;
             m.roughnessMap = null;
             m.metalness = 0.0;
@@ -324,6 +332,10 @@ onMounted(() => {
     scene.add(d);
   }
 
+  // NOTA: la sección 2 (tubos + cajas de bases de datos) ahora es un overlay
+  // HTML/SVG en HomeLanding (ángulos rectos perfectos, logos nítidos, leyendas).
+  // Aquí el 3D solo encoge la placa (pull-back de cámara) para dejarle sitio.
+
   // ── Post-procesado: bloom ──
   const composer = new EffectComposer(renderer);
   composer.addPass(new RenderPass(scene, camera));
@@ -353,9 +365,14 @@ onMounted(() => {
     const p = Math.min(Math.max(props.progress ?? 0, 0), 1);
     const PHASE1 = 0.45;
     const p1 = Math.min(p / PHASE1, 1);
-    const p2 = Math.max((p - PHASE1) / (1 - PHASE1), 0);
+    const phase2 = Math.max((p - PHASE1) / (1 - PHASE1), 0);
+    // La fase 2 se subdivide: primero SETTLE (la placa se acomoda → cenital),
+    // luego REVEAL (aparecen tubos en L, iconos y pulsos) y al final el título.
+    const settle = Math.min(phase2 / 0.5, 1);
+    const reveal = Math.max((phase2 - 0.5) / 0.5, 0);
     const e = p1 * p1 * (3 - 2 * p1); // smoothstep fase 1
-    const e2 = p2 * p2 * (3 - 2 * p2); // smoothstep fase 2
+    const eSettle = settle * settle * (3 - 2 * settle);
+    const eReveal = reveal * reveal * (3 - 2 * reveal);
 
     const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
     const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
@@ -366,9 +383,12 @@ onMounted(() => {
     const hoverY = HOVER + Math.sin(elapsed * 1.2) * 0.12 * (1 - p1); // el bob se apaga
     cube.position.y = hoverY + (restY - hoverY) * e;
 
-    // Fase 2: cámara isométrica → cenital (la placa se vuelve un cuadrado plano)
-    camera.position.lerpVectors(ISO_POS, TOP_POS, e2);
-    camTgt.lerpVectors(ISO_TGT, TOP_TGT, e2);
+    // SETTLE: cámara isométrica → cenital (la placa se acomoda como cuadrado plano)
+    camera.position.lerpVectors(ISO_POS, TOP_POS, eSettle);
+    camTgt.lerpVectors(ISO_TGT, TOP_TGT, eSettle);
+    // REVEAL: la cámara se ALEJA → la placa se ve más pequeña y deja sitio al
+    // overlay HTML de las bases de datos.
+    if (reveal > 0) camera.position.lerpVectors(TOP_POS, TOP_FAR, eReveal);
     camera.lookAt(camTgt);
 
     updateBridges(cubeBottom(), scaleNow / SCALE);

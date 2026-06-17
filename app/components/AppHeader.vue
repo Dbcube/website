@@ -18,8 +18,8 @@ const navLinks = [
 // Logo según el tema (reactivo e instantáneo)
 const logoSrc = computed(() => {
   return colorMode.value === "dark"
-    ? "https://pub-d1faa8ef561c493db89f6133874bc143.r2.dev/DBLOGO-WHITE-LARGE.webp"
-    : "https://pub-d1faa8ef561c493db89f6133874bc143.r2.dev/DBLOGO-BLACK-LARGE.webp";
+    ? "/dbcube-logo-large.png"
+    : "/dbcube-logo-large.png";
 });
 
 // Copiar el logo
@@ -74,33 +74,21 @@ const logoContextMenuItems = [
     },
   ],
 ];
-
-// Header flotante (isla) arriba → barra completa al hacer scroll.
-const scrolled = ref(false);
-let onScroll: (() => void) | null = null;
-onMounted(() => {
-  onScroll = () => { scrolled.value = window.scrollY > 24; };
-  onScroll();
-  window.addEventListener("scroll", onScroll, { passive: true });
-});
-onBeforeUnmount(() => {
-  if (onScroll) window.removeEventListener("scroll", onScroll);
-});
 </script>
 
 <template>
   <header class="sticky top-0 z-50 w-full h-16">
-    <!-- Isla flotante arriba; al hacer scroll se expande a barra completa -->
+    <!-- Isla flotante SIEMPRE (no se expande a barra completa) -->
     <div
-      class="absolute left-1/2 -translate-x-1/2 z-10 flex items-center justify-between gap-4 backdrop-blur-xl transition-all duration-300 ease-out"
-      :class="scrolled
-        ? 'top-0 h-16 w-full rounded-none border-b border-gray-200 dark:border-white/10 bg-white/75 dark:bg-black/70 px-6'
-        : 'top-3 h-12 w-[min(64rem,calc(100%-2rem))] rounded-2xl border border-gray-200 dark:border-white/10 bg-white/85 dark:bg-black/55 px-5 shadow-xl shadow-black/40'"
+      class="absolute left-1/2 -translate-x-1/2 top-3 h-12 z-10 flex items-center justify-between gap-4 backdrop-blur-xl w-[min(64rem,calc(100%-2rem))] rounded-2xl border border-gray-200 dark:border-white/10 bg-white/85 dark:bg-black/55 px-5 shadow-xl shadow-black/40"
     >
       <!-- Logo + Navegación (izquierda) -->
       <div class="flex items-center gap-8">
         <!-- Logo -->
-        <NuxtLink to="/" class="flex items-center gap-2 hover:opacity-80 transition-opacity">
+        <NuxtLink
+          to="/"
+          class="flex items-center gap-2 hover:opacity-80 transition-opacity"
+        >
           <UContextMenu :items="logoContextMenuItems">
             <img
               ref="logoElement"
@@ -183,8 +171,16 @@ onBeforeUnmount(() => {
         >
           {{ link.label }}
         </NuxtLink>
-        <div class="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-200 dark:border-gray-800">
-          <UButton to="/getting-started/installation" color="primary" variant="solid" size="sm" block>
+        <div
+          class="flex flex-col gap-2 mt-2 pt-2 border-t border-gray-200 dark:border-gray-800"
+        >
+          <UButton
+            to="/getting-started/installation"
+            color="primary"
+            variant="solid"
+            size="sm"
+            block
+          >
             Get started
           </UButton>
         </div>

@@ -59,7 +59,8 @@ const poweredIn = computed(() => seg(0.96, 1)); // aparece "Powered by Rust"
 const canvasStyle = computed(() => {
   const k = 1 - flatten.value;
   const x = 25 * k - 16 * cubeLeftT.value * (1 - cubeCenterT.value);
-  const y = -7 * k + 20 * cubeLeftT.value; // se mantiene abajo (centrado vertical)
+  // F4 baja para alinear con el terminal; en F5 sube de nuevo (estrella más arriba)
+  const y = -7 * k + 20 * cubeLeftT.value - 13 * cubeCenterT.value;
   return { transform: `translate(${x}%, ${y}%)` };
 });
 // banner: sube y se va mientras la placa se acomoda
@@ -164,16 +165,38 @@ const features = [
   { icon: "i-lucide-terminal", title: "Powerful CLI", desc: "Migrations with rollback, type generation, introspection, health doctor." },
 ];
 
-const compare: [string, string, string, boolean][] = [
-  ["SELECT by primary key", "0.73 ms", "1.01 ms", true],
-  ["UPDATE by primary key", "1.41 ms", "1.82 ms", true],
-  ["Transaction (2 writes)", "2.07 ms", "3.82 ms", true],
-  ["Bulk INSERT 1,000 rows", "14.9 ms", "21.6 ms", true],
-  ["Relation load (50+orders)", "3.28 ms", "4.55 ms", true],
-  ["100 concurrent lookups", "8.05 ms", "8.04 ms", false],
+const compare: { op: string; db: number; prisma: number }[] = [
+  { op: "SELECT by primary key", db: 0.73, prisma: 1.01 },
+  { op: "UPDATE by primary key", db: 1.41, prisma: 1.82 },
+  { op: "Transaction (2 writes)", db: 2.07, prisma: 3.82 },
+  { op: "Bulk INSERT 1,000 rows", db: 14.9, prisma: 21.6 },
+  { op: "Relation load (50+ orders)", db: 3.28, prisma: 4.55 },
+  { op: "100 concurrent lookups", db: 8.05, prisma: 8.04 },
 ];
+// barras relativas al máximo de cada fila (menor = mejor) + chip de aceleración
+const compareRows = computed(() =>
+  compare.map((r) => {
+    const max = Math.max(r.db, r.prisma);
+    const speed = r.prisma / r.db;
+    const tie = Math.abs(speed - 1) <= 0.02;
+    return {
+      ...r,
+      dbW: (r.db / max) * 100,
+      prismaW: (r.prisma / max) * 100,
+      tie,
+      label: tie ? "≈ tied" : `${speed.toFixed(2)}× faster`,
+    };
+  })
+);
 
-const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AWS RDS"];
+const clouds = [
+  { name: "Supabase", kind: "PostgreSQL" },
+  { name: "Neon", kind: "PostgreSQL" },
+  { name: "PlanetScale", kind: "MySQL" },
+  { name: "MongoDB Atlas", kind: "MongoDB" },
+  { name: "Turso", kind: "libSQL" },
+  { name: "AWS RDS", kind: "Postgres / MySQL" },
+];
 </script>
 
 <template>
@@ -294,29 +317,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
       </div>
     </section>
 
-    <!-- ════════ STAT BAND ════════ -->
-    <section class="stats" data-reveal>
-      <div class="stats__grid">
-        <div class="stat">
-          <div class="stat__num">8/9</div>
-          <div class="stat__lbl">operations beat Prisma</div>
-        </div>
-        <div class="stat">
-          <div class="stat__num">0.73<span>ms</span></div>
-          <div class="stat__lbl">primary-key read</div>
-        </div>
-        <div class="stat">
-          <div class="stat__num">5</div>
-          <div class="stat__lbl">databases, one API</div>
-        </div>
-        <div class="stat">
-          <div class="stat__num">1</div>
-          <div class="stat__lbl">round-trip transactions</div>
-        </div>
-      </div>
-    </section>
-
-    <!-- (La sección "See it move" ahora vive en la fase 4 del hero) -->
+    <!-- (Los stats viven en la fase 3 del hero; la "See it move" en la fase 4) -->
 
     <!-- ════════ FEATURES ════════ -->
     <section class="block">
@@ -341,14 +342,22 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
           Real PostgreSQL 16, same machine, same connection budget. Median latency, lower is better.
         </p>
       </div>
-      <div class="cmp" data-reveal>
-        <div class="cmp__row cmp__row--head">
-          <span>Operation</span><span class="cmp__db">DBCube</span><span>Prisma</span>
-        </div>
-        <div v-for="row in compare" :key="row[0]" class="cmp__row">
-          <span class="cmp__op">{{ row[0] }}</span>
-          <span class="cmp__db" :class="{ 'cmp__win': row[3] }">{{ row[1] }}</span>
-          <span class="cmp__rival">{{ row[2] }}</span>
+      <div class="bench" data-reveal>
+        <div v-for="row in compareRows" :key="row.op" class="bench__row">
+          <div class="bench__op">{{ row.op }}</div>
+          <div class="bench__lines">
+            <div class="bench__line">
+              <span class="bench__name bench__name--db">DBCube</span>
+              <div class="bench__track"><div class="bench__fill bench__fill--db" :style="{ width: row.dbW + '%' }" /></div>
+              <span class="bench__num bench__num--db">{{ row.db }} ms</span>
+            </div>
+            <div class="bench__line">
+              <span class="bench__name">Prisma</span>
+              <div class="bench__track"><div class="bench__fill bench__fill--rival" :style="{ width: row.prismaW + '%' }" /></div>
+              <span class="bench__num">{{ row.prisma }} ms</span>
+            </div>
+          </div>
+          <div class="bench__chip" :class="{ 'bench__chip--tie': row.tie }">{{ row.label }}</div>
         </div>
       </div>
       <p class="cmp__foot" data-reveal>
@@ -363,7 +372,14 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
         <p class="block__sub">One connection string. TLS on by default. Zero code changes.</p>
       </div>
       <div class="clouds" data-reveal>
-        <span v-for="c in clouds" :key="c" class="cloud">{{ c }}</span>
+        <code class="clouds__url">
+          <span class="clouds__key">DATABASE_URL=</span>"…@your-host:5432/app?<span class="clouds__tls">sslmode=require</span>"
+        </code>
+        <div class="clouds__tags">
+          <span v-for="c in clouds" :key="c.name" class="ctag">
+            <span class="ctag__dot" />{{ c.name }}<em>{{ c.kind }}</em>
+          </span>
+        </div>
       </div>
     </section>
 
@@ -591,7 +607,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 
 /* Fase 5 — "Powered by Rust" bajo la estrella */
 .hero__powered {
-  position: absolute; top: 62%; left: 0; right: 0; z-index: 4; pointer-events: none;
+  position: absolute; top: 52%; left: 0; right: 0; z-index: 4; pointer-events: none;
   text-align: center; padding: 0 1.5rem; text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
 }
 
@@ -629,25 +645,64 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .feat__title { font-weight: 700; font-size: 1.1rem; margin-bottom: 0.4rem; }
 .feat__desc { color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
 
-/* ── COMPARISON ── */
-.cmp { max-width: 50rem; margin: 0 auto; border: 1px solid var(--border); border-radius: 14px; overflow: hidden; background: var(--card); }
-.cmp__row { display: grid; grid-template-columns: 2fr 1fr 1fr; padding: 0.85rem 1.4rem; align-items: center; border-top: 1px solid var(--border); font-size: 0.92rem; }
-.cmp__row:first-child { border-top: none; }
-.cmp__row--head { font-weight: 700; background: color-mix(in srgb, var(--cyan) 6%, transparent); }
-.cmp__op { color: var(--muted); }
-.cmp__db { text-align: right; font-family: ui-monospace, monospace; font-weight: 700; }
-.cmp__rival { text-align: right; font-family: ui-monospace, monospace; color: var(--muted); }
-.cmp__win { color: var(--cyan); }
-.cmp__foot { text-align: center; margin-top: 1.5rem; }
+/* ── COMPARISON (barras DBCube vs Prisma) ── */
+.bench { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
+.bench__row {
+  display: grid; grid-template-columns: 13rem 1fr 7rem; gap: 1.4rem; align-items: center;
+  padding-bottom: 1.4rem; border-bottom: 1px solid var(--border);
+}
+.bench__row:last-child { border-bottom: none; padding-bottom: 0; }
+.bench__op { font-weight: 600; font-size: 0.95rem; }
+.bench__lines { display: flex; flex-direction: column; gap: 0.5rem; }
+.bench__line { display: grid; grid-template-columns: 4.5rem 1fr 4.2rem; gap: 0.7rem; align-items: center; }
+.bench__name { font-size: 0.78rem; color: var(--muted); }
+.bench__name--db { color: var(--fg); font-weight: 600; }
+.bench__track { height: 0.7rem; background: rgba(255, 255, 255, 0.06); border-radius: 999px; overflow: hidden; }
+.bench__fill { height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
+.bench__fill--db { background: linear-gradient(90deg, var(--cyan), #3b82f6); box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 45%, transparent); }
+.bench__fill--rival { background: rgba(255, 255, 255, 0.22); }
+.bench__num { font-family: ui-monospace, monospace; font-size: 0.8rem; text-align: right; color: var(--muted); }
+.bench__num--db { color: var(--cyan); font-weight: 700; }
+.bench__chip {
+  text-align: center; font-weight: 700; font-size: 0.8rem; color: var(--cyan);
+  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent); border-radius: 999px;
+  padding: 0.35rem 0.4rem; background: color-mix(in srgb, var(--cyan) 8%, transparent);
+}
+.bench__chip--tie { color: var(--muted); border-color: var(--border); background: transparent; }
+@media (max-width: 720px) {
+  .bench__row { grid-template-columns: 1fr; gap: 0.7rem; }
+  .bench__chip { justify-self: start; }
+}
+.cmp__foot { text-align: center; margin-top: 2.2rem; }
 .cmp__foot a { color: var(--cyan); font-weight: 600; }
 
-/* ── CLOUDS ── */
-.clouds { display: flex; flex-wrap: wrap; gap: 0.8rem; justify-content: center; }
-.cloud {
-  padding: 0.6rem 1.3rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card);
-  font-weight: 600; font-size: 0.95rem; color: var(--fg); transition: border-color 0.2s, transform 0.2s;
+/* ── CLOUDS (una connection string + tags de proveedores) ── */
+.clouds { max-width: 52rem; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2rem; }
+.clouds__url {
+  font-family: ui-monospace, monospace; font-size: clamp(0.8rem, 1.6vw, 1rem); color: #cfe8f2;
+  padding: 0.85rem 1.3rem; border-radius: 12px;
+  border: 1px solid color-mix(in srgb, var(--cyan) 28%, transparent);
+  background: rgba(8, 14, 20, 0.7); box-shadow: 0 0 30px -10px color-mix(in srgb, var(--cyan) 60%, transparent);
+  max-width: 100%; overflow-x: auto; white-space: nowrap;
 }
-.cloud:hover { border-color: var(--cyan); transform: translateY(-2px); }
+.clouds__key { color: var(--cyan); font-weight: 700; }
+.clouds__tls { color: #7fe0ff; text-decoration: underline; text-underline-offset: 3px; }
+.clouds__tags { display: flex; flex-wrap: wrap; gap: 0.7rem; justify-content: center; }
+.ctag {
+  display: inline-flex; align-items: center; gap: 0.5rem;
+  padding: 0.55rem 1rem; border-radius: 999px; border: 1px solid var(--border); background: var(--card);
+  font-weight: 600; font-size: 0.92rem; color: var(--fg);
+  transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+}
+.ctag em {
+  font-style: normal; font-size: 0.72rem; color: var(--muted); font-weight: 500;
+  padding-left: 0.5rem; border-left: 1px solid var(--border);
+}
+.ctag__dot { width: 7px; height: 7px; border-radius: 50%; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); flex: none; }
+.ctag:hover {
+  border-color: color-mix(in srgb, var(--cyan) 50%, transparent); transform: translateY(-2px);
+  box-shadow: 0 0 22px -8px color-mix(in srgb, var(--cyan) 55%, transparent);
+}
 
 /* ── FINAL ── */
 .final { text-align: center; padding: 7rem 1.5rem; border-top: 1px solid var(--border); }

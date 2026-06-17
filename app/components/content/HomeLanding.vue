@@ -47,15 +47,20 @@ const dbDrawIn = computed(() => seg(0.43, 0.5)); // los tubos se dibujan
 const dbRetract = computed(() => seg(0.54, 0.6)); // los tubos se retraen (reversa)
 const dashFactor = computed(() => 1 - dbDrawIn.value - dbRetract.value); // 1→0 (dibuja) → -1 (retrae)
 const statsIn = computed(() => seg(0.69, 0.76)); // los números aparecen ya posicionado
-const statsOut = computed(() => seg(0.79, 0.84)); // los números se van al iniciar la fase 4
-const cubeLeftT = computed(() => seg(0.93, 1)); // el cubo se va a la izquierda
-const terminalIn = computed(() => seg(0.94, 1)); // aparece el terminal a la derecha
+const statsOut = computed(() => seg(0.78, 0.82)); // los números se van al iniciar la fase 4
+const cubeLeftT = computed(() => seg(0.87, 0.91)); // el cubo se va a la izquierda
+const terminalIn = computed(() => seg(0.89, 0.92)); // aparece el terminal a la derecha
+// FASE 5: el cubo vuelve al centro, el terminal se va, los cubitos explotan
+const cubeCenterT = computed(() => seg(0.93, 0.97)); // el cubo regresa al centro (revierte la X)
+const terminalOut = computed(() => seg(0.93, 0.96)); // el terminal se va
+const poweredIn = computed(() => seg(0.96, 1)); // aparece "Powered by Rust"
 
-// canvas: centra al acomodarse y, en F4, se desplaza a la IZQUIERDA (cubo a la izq)
+// canvas: centra al acomodarse; en F4 va a la IZQUIERDA y baja; en F5 vuelve al centro (X)
 const canvasStyle = computed(() => {
   const k = 1 - flatten.value;
-  // en F4 el canvas baja un poco para centrar el cubo con la sección del terminal
-  return { transform: `translate(${25 * k - 16 * cubeLeftT.value}%, ${-7 * k + 20 * cubeLeftT.value}%)` };
+  const x = 25 * k - 16 * cubeLeftT.value * (1 - cubeCenterT.value);
+  const y = -7 * k + 20 * cubeLeftT.value; // se mantiene abajo (centrado vertical)
+  return { transform: `translate(${x}%, ${y}%)` };
 });
 // banner: sube y se va mientras la placa se acomoda
 const contentStyle = computed(() => ({
@@ -79,10 +84,13 @@ const STATS = [
 ];
 const statsStyle = computed(() => ({ opacity: statsIn.value * (1 - statsOut.value) }));
 
+// FASE 5 — "Powered by Rust" bajo la estrella
+const poweredStyle = computed(() => ({ opacity: poweredIn.value }));
+
 // FASE 4 — terminal "See it move" a la derecha (el cubo queda a la izquierda)
 const terminalStyle = computed(() => ({
-  opacity: terminalIn.value,
-  pointerEvents: terminalIn.value > 0.6 ? "auto" : "none",
+  opacity: terminalIn.value * (1 - terminalOut.value),
+  pointerEvents: terminalIn.value > 0.6 && terminalOut.value < 0.3 ? "auto" : "none",
 }));
 
 // ── Overlay HTML/SVG de las bases de datos (sobre el canvas, ángulos rectos) ──
@@ -277,6 +285,12 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
           </div>
           <PlaygroundTerminal />
         </div>
+
+        <!-- FASE 5: el cubo explota en una estrella + "Powered by Rust" -->
+        <div class="hero__powered" :style="poweredStyle">
+          <h2 class="s2__title">Powered by <span class="hero__grad">Rust</span></h2>
+          <p class="s2__sub">Our engine, compiled to the metal — raw, predictable speed under every query.</p>
+        </div>
       </div>
     </section>
 
@@ -408,7 +422,7 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .hero {
   position: relative;
   width: 100vw;
-  height: 680vh; /* track: 4 fases — cubo→chip, placa+bases, stats, y dispersión+terminal */
+  height: 820vh; /* track: 5 fases — cubo→chip, placa+bases, stats, dispersión+terminal, estrella+Rust */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #04060a;
   --fg: #eef3f8;
@@ -573,6 +587,12 @@ const clouds = ["Supabase", "Neon", "PlanetScale", "MongoDB Atlas", "Turso", "AW
 .pg__head .s2__sub { margin-top: 0.3rem; }
 @media (max-width: 860px) {
   .hero__playground { position: absolute; left: 5%; right: 5%; width: auto; top: 54%; }
+}
+
+/* Fase 5 — "Powered by Rust" bajo la estrella */
+.hero__powered {
+  position: absolute; top: 62%; left: 0; right: 0; z-index: 4; pointer-events: none;
+  text-align: center; padding: 0 1.5rem; text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
 }
 
 /* ── STATS ── */

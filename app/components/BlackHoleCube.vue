@@ -112,6 +112,32 @@ onMounted(() => {
   const coreLight = new THREE.PointLight(CORE_COLOR, 2.5, 9, 2);
   cube.add(coreLight);
 
+  // FASE 5: resplandor tipo estrella que queda cuando los cubitos salen volando
+  const starCanvas = document.createElement("canvas");
+  starCanvas.width = starCanvas.height = 128;
+  {
+    const sc = starCanvas.getContext("2d")!;
+    const g = sc.createRadialGradient(64, 64, 0, 64, 64, 64);
+    g.addColorStop(0, "rgba(180,240,255,1)");
+    g.addColorStop(0.25, "rgba(111,210,255,0.85)");
+    g.addColorStop(1, "rgba(111,210,255,0)");
+    sc.fillStyle = g;
+    sc.fillRect(0, 0, 128, 128);
+  }
+  const starGlow = new THREE.Sprite(
+    new THREE.SpriteMaterial({
+      map: new THREE.CanvasTexture(starCanvas),
+      color: CORE_COLOR,
+      transparent: true,
+      opacity: 0,
+      blending: THREE.AdditiveBlending,
+      depthWrite: false,
+    })
+  );
+  starGlow.material.toneMapped = false;
+  starGlow.scale.setScalar(0.5);
+  cube.add(starGlow);
+
   cube.scale.setScalar(0.637);
   scene.add(cube);
 
@@ -406,9 +432,10 @@ onMounted(() => {
     const eFlat = ss(seg(0.22, 0.34));
     const eShrink = ss(seg(0.34, 0.4));
     const eStats = ss(seg(0.6, 0.68)); // cámara angular + cubo re-emerge
-    const separate = ss(seg(0.78, 0.86)); // los tubos se sueltan del cubo y caen
-    const boardDown = ss(seg(0.9, 0.96)); // la placa (y sus tubos) baja y desaparece
+    const separate = ss(seg(0.77, 0.84)); // los tubos se sueltan del cubo y caen
+    const boardDown = ss(seg(0.84, 0.89)); // la placa (y sus tubos) baja y desaparece
     const dropY = -16 * boardDown;
+    const explode = ss(seg(0.95, 1)); // FASE 5: los cubitos salen volando → estrella
 
     const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
     const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
@@ -465,8 +492,16 @@ onMounted(() => {
       c.d += c.v * dt;
       if (c.d < 0) { c.d = 0; c.v = 0; }
       if (c.d > MAX_OUT) { c.d = MAX_OUT; c.v = 0; }
-      c.mesh.position.copy(c.home).addScaledVector(c.dir, c.d);
+      // FASE 5: los cubitos salen volando hacia afuera y se encogen a 0
+      c.mesh.position.copy(c.home).addScaledVector(c.dir, c.d + explode * 8);
+      c.mesh.scale.setScalar(1 - explode);
     }
+
+    // FASE 5: queda una estrella de luz (el núcleo) en el centro
+    (starGlow.material as THREE.SpriteMaterial).opacity = explode;
+    starGlow.scale.setScalar(0.5 + explode * 3);
+    core.scale.setScalar(1 - explode * 0.78); // el núcleo se reduce a un punto
+    coreLight.intensity = 2.5 + explode * 4;
 
     composer.render();
   }

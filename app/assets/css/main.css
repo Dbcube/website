@@ -25,9 +25,15 @@ body {
 
 /* Modo oscuro */
 html.dark {
-  --ui-primary: #51fbde;
-  --ui-bg: #050505;
+  --ui-primary: #21d2ed;
+  --ui-bg: #000;
   --ui-text: #ffffff;
+}
+/* el fondo del body en oscuro debe ser negro puro: si no, en el home se ve una
+   banda más clara en la franja del header (los 64px que el hero sticky no cubre) */
+html.dark,
+html.dark body {
+  background-color: #000;
 }
 
 header {

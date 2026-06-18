@@ -417,7 +417,7 @@ const clouds = [
 }
 /* oscuro: clase aplicada por useColorMode (infalible dentro de MDC) */
 .dbx--dark {
-  --bg: #04060a;
+  --bg: #000;
   --fg: #eef3f8;
   --muted: #8a97a6;
   --card: rgba(255, 255, 255, 0.03);
@@ -440,7 +440,7 @@ const clouds = [
   width: 100vw;
   height: 820vh; /* track: 5 fases — cubo→chip, placa+bases, stats, dispersión+terminal, estrella+Rust */
   /* paleta fija oscura, sin importar el tema del resto de la página */
-  --bg: #04060a;
+  --bg: #000;
   --fg: #eef3f8;
   --muted: #93a1b0;
   --card: rgba(255, 255, 255, 0.04);

@@ -74,13 +74,20 @@ const logoContextMenuItems = [
     },
   ],
 ];
+
+// El home usa header flotante (isla); en la documentación, barra de ancho completo.
+const route = useRoute();
+const isHome = computed(() => route.path === "/");
 </script>
 
 <template>
   <header class="sticky top-0 z-50 w-full h-16">
-    <!-- Isla flotante SIEMPRE (no se expande a barra completa) -->
+    <!-- Home: isla flotante. Documentación: barra de ancho completo. -->
     <div
-      class="absolute left-1/2 -translate-x-1/2 top-3 h-12 z-10 flex items-center justify-between gap-4 backdrop-blur-xl w-[min(64rem,calc(100%-2rem))] rounded-2xl border border-gray-200 dark:border-white/10 bg-white/85 dark:bg-black/55 px-5 shadow-xl shadow-black/40"
+      class="absolute z-10 flex items-center justify-between gap-4 backdrop-blur-xl border-gray-200 dark:border-white/10"
+      :class="isHome
+        ? 'left-1/2 -translate-x-1/2 top-3 h-12 w-[min(64rem,calc(100%-2rem))] rounded-2xl border bg-white/85 dark:bg-black/55 px-5 shadow-xl shadow-black/40'
+        : 'left-0 top-0 h-16 w-full border-b bg-white/80 dark:bg-black/70 px-6'"
     >
       <!-- Logo + Navegación (izquierda) -->
       <div class="flex items-center gap-8">

@@ -77,6 +77,28 @@ let timer: ReturnType<typeof setTimeout> | null = null;
 
 const current = computed(() => demos[active.value]);
 
+// Resaltador ligero (regex de UNA pasada) para JS y comandos CLI. Funciona con la
+// animación de tipeo: tokens a medio escribir quedan en color base hasta cerrarse.
+const TOKEN_RE =
+  /(\/\/[^\n]*)|((['"`])(?:\\.|(?!\3)[^\\])*\3)|(\b(?:npx|npm|dbcube|run|generate|fresh)\b)|(\b(?:const|let|var|await|async|function|return|new|import|export|from|if|else|for|of|in|true|false|null|undefined)\b)|(\.[a-zA-Z_]\w*(?=\s*\())|(\b[a-zA-Z_]\w*(?=\s*:))|(\b\d+(?:\.\d+)?\b)/g;
+
+function highlightCode(src: string): string {
+  if (!src) return "";
+  const esc = src.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  return esc.replace(TOKEN_RE, (m, com, str, _q, cli, kw, fn, prop, num) => {
+    if (com) return `<span class="t-com">${com}</span>`;
+    if (str) return `<span class="t-str">${str}</span>`;
+    if (cli) return `<span class="t-cli">${cli}</span>`;
+    if (kw) return `<span class="t-kw">${kw}</span>`;
+    if (fn) return `.<span class="t-fn">${fn.slice(1)}</span>`;
+    if (prop) return `<span class="t-prop">${prop}</span>`;
+    if (num) return `<span class="t-num">${num}</span>`;
+    return m;
+  });
+}
+
+const highlightedCode = computed(() => highlightCode(typed.value));
+
 function clearTimer() {
   if (timer) {
     clearTimeout(timer);
@@ -130,8 +152,8 @@ onBeforeUnmount(clearTimer);
       <span class="ph-file">{{ current.prompt }}</span>
     </div>
 
-    <!-- código (typing) -->
-    <pre class="ph-code"><span class="ph-gutter">$</span><code>{{ typed }}<span class="ph-caret" /></code></pre>
+    <!-- código (typing con resaltado) -->
+    <pre class="ph-code"><span class="ph-gutter">$</span><code><span v-html="highlightedCode" /><span class="ph-caret" /></code></pre>
 
     <!-- salida -->
     <transition name="ph-fade">
@@ -150,6 +172,7 @@ onBeforeUnmount(clearTimer);
   border: 1px solid rgba(34, 211, 238, 0.18);
   box-shadow: 0 0 60px -15px rgba(34, 211, 238, 0.35), 0 20px 50px -20px rgba(0, 0, 0, 0.8);
   font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  text-align: left; /* no heredar el center del hero en móvil */
 }
 .ph-tabs {
   display: flex;
@@ -201,7 +224,9 @@ onBeforeUnmount(clearTimer);
   color: #d6dee8;
   white-space: pre-wrap;
   word-break: break-word;
+  text-align: left;
 }
+.ph-code code { display: inline; }
 .ph-gutter {
   color: #22d3ee;
   margin-right: 10px;
@@ -217,12 +242,23 @@ onBeforeUnmount(clearTimer);
   animation: ph-blink 1s steps(2) infinite;
 }
 @keyframes ph-blink { 0%, 50% { opacity: 1; } 50.01%, 100% { opacity: 0; } }
+
+/* paleta de sintaxis (estilo GitHub dark, cohesiva con el cian del sitio) */
+.ph-code :deep(.t-kw) { color: #ff7b72; }
+.ph-code :deep(.t-str) { color: #a5d6ff; }
+.ph-code :deep(.t-fn) { color: #d2a8ff; }
+.ph-code :deep(.t-num) { color: #79c0ff; }
+.ph-code :deep(.t-prop) { color: #79c0ff; }
+.ph-code :deep(.t-com) { color: #8b949e; font-style: italic; }
+.ph-code :deep(.t-cli) { color: #7ee787; font-weight: 600; }
+
 .ph-out {
   padding: 14px 18px 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
   background: #060a0f;
   font-size: 12.5px;
   line-height: 1.65;
+  text-align: left;
 }
 .ph-line {
   margin: 0;

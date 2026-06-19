@@ -13,8 +13,10 @@ const isDark = computed(() => colorMode.value === "dark");
 // track y se usa para que el cubo descienda, encoja y entre al chip.
 const heroEl = ref<HTMLElement | null>(null);
 const progress = ref(0);
+const isMobile = ref(false); // < 860px: el split escritorio se centra/apila
 
 let onScroll: (() => void) | null = null;
+let onResize: (() => void) | null = null;
 onMounted(() => {
   const headerPx =
     parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-header-height")) || 64;
@@ -27,15 +29,14 @@ onMounted(() => {
     progress.value = trackLen > 0 ? Math.min(Math.max(scrolled / trackLen, 0), 1) : 0;
   };
   onScroll = () => requestAnimationFrame(compute);
+  onResize = () => { isMobile.value = window.innerWidth < 860; compute(); };
+  onResize();
   window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("resize", onScroll, { passive: true });
-  compute();
+  window.addEventListener("resize", onResize, { passive: true });
 });
 onBeforeUnmount(() => {
-  if (onScroll) {
-    window.removeEventListener("scroll", onScroll);
-    window.removeEventListener("resize", onScroll);
-  }
+  if (onScroll) window.removeEventListener("scroll", onScroll);
+  if (onResize) window.removeEventListener("resize", onResize);
 });
 
 // ── Scrollytelling en 4 fases (mismos umbrales que BlackHoleCube) ──
@@ -56,16 +57,28 @@ const terminalOut = computed(() => seg(0.93, 0.96)); // el terminal se va
 const poweredIn = computed(() => seg(0.96, 1)); // aparece "Powered by Rust"
 
 // canvas: centra al acomodarse; en F4 va a la IZQUIERDA y baja; en F5 vuelve al centro (X)
+// En móvil el cubo va CENTRADO (sin offset horizontal del split de escritorio).
 const canvasStyle = computed(() => {
   const k = 1 - flatten.value;
-  const x = 25 * k - 16 * cubeLeftT.value * (1 - cubeCenterT.value);
-  // F4 baja para alinear con el terminal; en F5 sube de nuevo (estrella más arriba)
-  const y = -7 * k + 20 * cubeLeftT.value - 13 * cubeCenterT.value;
-  return { transform: `translate(${x}%, ${y}%)` };
+  const xBase = isMobile.value ? 0 : 25;
+  const xLeft = isMobile.value ? 0 : 16;
+  const x = xBase * k - xLeft * cubeLeftT.value * (1 - cubeCenterT.value);
+  // F4 baja para alinear con el terminal; en F5 sube de nuevo (estrella más arriba).
+  // En móvil el cubo sube (no hay sitio lateral) y se desvanece bajo el terminal.
+  const yLeft = isMobile.value ? -52 : 20;
+  const y = -7 * k + yLeft * cubeLeftT.value - (isMobile.value ? 0 : 13) * cubeCenterT.value;
+  const style: Record<string, string> = { transform: `translate(${x}%, ${y}%)` };
+  if (isMobile.value) {
+    // se apaga (casi del todo) mientras el terminal ocupa la pantalla; vuelve
+    // para "Powered by Rust". Usa el inicio de cubeLeft para apagar pronto.
+    const fade = cubeLeftT.value * (1 - poweredIn.value);
+    style.opacity = String(1 - 0.95 * fade);
+  }
+  return style;
 });
-// banner: sube y se va mientras la placa se acomoda
+// banner: sube y se va mientras la placa se acomoda. En móvil va centrado (sin 30%).
 const contentStyle = computed(() => ({
-  transform: `translate(30%, ${-flatten.value * 60}vh)`,
+  transform: `translate(${isMobile.value ? 0 : 30}%, ${-flatten.value * 60}vh)`,
   opacity: 1 - Math.min(flatten.value * 1.4, 1),
 }));
 // veil: solo hace falta en la fase 1 (texto sobre la izquierda); se desvanece
@@ -76,13 +89,21 @@ const section2Style = computed(() => ({
   opacity: seg(0.45, 0.5) * (1 - seg(0.54, 0.6)),
 }));
 
-// FASE 3 — stats de rendimiento (4 datos a los lados del cubo flotante)
-const STATS = [
+// FASE 3 — stats de rendimiento (4 datos alrededor del cubo flotante)
+// Desktop: a los lados (x 15/85). Móvil: 2 arriba / 2 abajo, cerca del centro.
+const STATS_DESKTOP = [
   { num: "8/9", label: "operations beat Prisma", x: 15, y: 33 },
   { num: "0.73ms", label: "primary-key read", x: 15, y: 66 },
   { num: "5", label: "databases, one API", x: 85, y: 33 },
   { num: "1", label: "round-trip transaction", x: 85, y: 66 },
 ];
+const STATS_MOBILE = [
+  { num: "8/9", label: "operations beat Prisma", x: 27, y: 24 },
+  { num: "0.73ms", label: "primary-key read", x: 73, y: 24 },
+  { num: "5", label: "databases, one API", x: 27, y: 78 },
+  { num: "1", label: "round-trip transaction", x: 73, y: 78 },
+];
+const STATS = computed(() => (isMobile.value ? STATS_MOBILE : STATS_DESKTOP));
 const statsStyle = computed(() => ({ opacity: statsIn.value * (1 - statsOut.value) }));
 
 // FASE 5 — "Powered by Rust" bajo la estrella
@@ -489,6 +510,29 @@ const clouds = [
   transform: translateX(30%);
   text-shadow: 0 2px 24px rgba(4, 5, 7, 0.8);
 }
+
+/* ── MÓVIL/TABLET: el split (texto izq / escena der) se centra y apila ── */
+@media (max-width: 859px) {
+  .hero__stage {
+    align-items: center;
+    text-align: center;
+    padding: 0 1.25rem;
+  }
+  .hero__content { max-width: 100%; }
+  .hero__cta { justify-content: center; }
+  .hero__sub { margin-left: auto; margin-right: auto; }
+  /* veil centrado (el texto va sobre el cubo, no a la izquierda) */
+  .hero__veil {
+    background:
+      radial-gradient(ellipse 80% 55% at 50% 50%, rgba(4, 5, 7, 0.72), transparent 80%),
+      linear-gradient(180deg, rgba(4, 5, 7, 0.5) 0%, transparent 30%, transparent 70%, rgba(4, 5, 7, 0.6) 100%);
+  }
+  .hero__stats-head { top: 4%; }
+  .statcard { width: clamp(120px, 42vw, 165px); }
+  .statcard__num { font-size: clamp(1.8rem, 8vw, 2.6rem); }
+  .hero__powered { top: 56%; }
+}
+
 .hero__badge {
   display: inline-flex; align-items: center; gap: 0.5rem;
   font-size: 0.8rem; font-weight: 500;

@@ -39,10 +39,41 @@ onBeforeUnmount(() => {
   if (onResize) window.removeEventListener("resize", onResize);
 });
 
-// ── Scrollytelling en 4 fases (mismos umbrales que BlackHoleCube) ──
-//  F1 cubo→chip (0–0.18) · F2 aplanar(0.22–0.36)+encoger+bases(0.43–0.60)
-//  F3 stats (0.60–0.78) · F4 (0.80–1) tubos caen+chispean, placa baja, cubo→izq + terminal.
-const seg = (a: number, b: number) => Math.min(Math.max((progress.value - a) / (b - a), 0), 1);
+// ── Remapeo del scroll con "holds" ──
+// Tras cada fase se inserta una meseta (hold): el progreso de animación se
+// congela mientras se sigue scrolleando, para apreciar el diseño antes de
+// continuar. NO cambia los umbrales: solo añade pausas en esos puntos de reposo.
+const HOLDS = [0.18, 0.4, 0.52, 0.77, 0.93]; // puntos donde cada fase "ya se acomodó"
+const HOLD_W = 6; // peso (scroll extra) de cada pausa
+const SEGMENTS = (() => {
+  const pts = [0, ...HOLDS, 1];
+  const segs: { a: number; b: number; w: number; hold: boolean; r0: number; r1: number }[] = [];
+  for (let i = 0; i < pts.length - 1; i++) {
+    const a = pts[i], b = pts[i + 1];
+    // el último tramo (dispersión + core) recibe MÁS scroll para que sea lento
+    const w = (b - a) * 100 * (b === 1 ? 3.2 : 1);
+    segs.push({ a, b, w, hold: false, r0: 0, r1: 0 });
+    if (b < 1) segs.push({ a: b, b, w: HOLD_W, hold: true, r0: 0, r1: 0 });
+  }
+  const total = segs.reduce((s, x) => s + x.w, 0);
+  let acc = 0;
+  for (const s of segs) { s.r0 = acc / total; acc += s.w; s.r1 = acc / total; }
+  return segs;
+})();
+const animProgress = computed(() => {
+  const raw = progress.value;
+  for (const s of SEGMENTS) {
+    if (raw <= s.r1 || s === SEGMENTS[SEGMENTS.length - 1]) {
+      if (s.hold) return s.a;
+      const t = (raw - s.r0) / (s.r1 - s.r0 || 1);
+      return s.a + (s.b - s.a) * Math.min(Math.max(t, 0), 1);
+    }
+  }
+  return 1;
+});
+
+// Los umbrales operan sobre el progreso REMAPEADO (mismos valores que BlackHoleCube).
+const seg = (a: number, b: number) => Math.min(Math.max((animProgress.value - a) / (b - a), 0), 1);
 const flatten = computed(() => seg(0.22, 0.36)); // la placa se acomoda
 const dbDrawIn = computed(() => seg(0.43, 0.5)); // los tubos se dibujan
 const dbRetract = computed(() => seg(0.54, 0.6)); // los tubos se retraen (reversa)
@@ -92,16 +123,16 @@ const section2Style = computed(() => ({
 // FASE 3 — stats de rendimiento (4 datos alrededor del cubo flotante)
 // Desktop: a los lados (x 15/85). Móvil: 2 arriba / 2 abajo, cerca del centro.
 const STATS_DESKTOP = [
-  { num: "8/9", label: "operations beat Prisma", x: 15, y: 33 },
-  { num: "0.73ms", label: "primary-key read", x: 15, y: 66 },
+  { num: "0.73ms", label: "primary-key read", x: 15, y: 33 },
+  { num: "100%", label: "type-safe queries", x: 15, y: 66 },
   { num: "5", label: "databases, one API", x: 85, y: 33 },
-  { num: "1", label: "round-trip transaction", x: 85, y: 66 },
+  { num: "1-RTT", label: "atomic transactions", x: 85, y: 66 },
 ];
 const STATS_MOBILE = [
-  { num: "8/9", label: "operations beat Prisma", x: 27, y: 24 },
-  { num: "0.73ms", label: "primary-key read", x: 73, y: 24 },
+  { num: "0.73ms", label: "primary-key read", x: 27, y: 24 },
+  { num: "100%", label: "type-safe queries", x: 73, y: 24 },
   { num: "5", label: "databases, one API", x: 27, y: 78 },
-  { num: "1", label: "round-trip transaction", x: 73, y: 78 },
+  { num: "1-RTT", label: "atomic transactions", x: 73, y: 78 },
 ];
 const STATS = computed(() => (isMobile.value ? STATS_MOBILE : STATS_DESKTOP));
 const statsStyle = computed(() => ({ opacity: statsIn.value * (1 - statsOut.value) }));
@@ -186,13 +217,15 @@ const features = [
   { icon: "i-lucide-terminal", title: "Powerful CLI", desc: "Migrations with rollback, type generation, introspection, health doctor." },
 ];
 
+// Real medians from the published benchmark suite (full run, PostgreSQL 16,
+// pool ≤ 10). Same numbers as /performance and benchmarks/results/latest.md.
 const compare: { op: string; db: number; prisma: number }[] = [
-  { op: "SELECT by primary key", db: 0.73, prisma: 1.01 },
-  { op: "UPDATE by primary key", db: 1.41, prisma: 1.82 },
-  { op: "Transaction (2 writes)", db: 2.07, prisma: 3.82 },
-  { op: "Bulk INSERT 1,000 rows", db: 14.9, prisma: 21.6 },
-  { op: "Relation load (50+ orders)", db: 3.28, prisma: 4.55 },
-  { op: "100 concurrent lookups", db: 8.05, prisma: 8.04 },
+  { op: "SELECT by primary key", db: 1.15, prisma: 1.85 },
+  { op: "Filtered list (LIMIT 20)", db: 1.10, prisma: 1.53 },
+  { op: "COUNT with filter", db: 0.83, prisma: 1.09 },
+  { op: "Transaction (2 writes)", db: 2.15, prisma: 4.70 },
+  { op: "Bulk INSERT 1,000 rows", db: 16.5, prisma: 23.6 },
+  { op: "100 concurrent lookups", db: 8.29, prisma: 9.35 },
 ];
 // barras relativas al máximo de cada fila (menor = mejor) + chip de aceleración
 const compareRows = computed(() =>
@@ -227,7 +260,7 @@ const clouds = [
       <div ref="stageEl" class="hero__stage">
         <div class="hero__canvas" :style="canvasStyle">
           <ClientOnly>
-            <BlackHoleCube :progress="progress" />
+            <BlackHoleCube :progress="animProgress" />
           </ClientOnly>
         </div>
         <div class="hero__veil" :style="veilStyle" />
@@ -308,7 +341,7 @@ const clouds = [
         <!-- Sección 3: stats de rendimiento (cubo re-emerge + datos a los lados) -->
         <div class="hero__stats" :style="statsStyle">
           <div class="hero__stats-head">
-            <h2 class="s2__title">Benchmarked to <span class="hero__grad">beat Prisma</span></h2>
+            <h2 class="s2__title">Engineered for <span class="hero__grad">raw speed</span></h2>
           </div>
           <div
             v-for="(s, i) in STATS"
@@ -459,7 +492,7 @@ const clouds = [
 .hero {
   position: relative;
   width: 100vw;
-  height: 820vh; /* track: 5 fases — cubo→chip, placa+bases, stats, dispersión+terminal, estrella+Rust */
+  height: 1230vh; /* track: 5 fases + holds + dispersión lenta del core al final */
   /* paleta fija oscura, sin importar el tema del resto de la página */
   --bg: #000;
   --fg: #eef3f8;

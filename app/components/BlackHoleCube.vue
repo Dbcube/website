@@ -77,7 +77,7 @@ onMounted(() => {
   });
 
   const CORE_COLOR = 0x6fd2ff;
-  const cubelets: { mesh: THREE.Mesh; home: THREE.Vector3; dir: THREE.Vector3; d: number; v: number }[] = [];
+  const cubelets: { mesh: THREE.Mesh; home: THREE.Vector3; dir: THREE.Vector3; d: number; v: number; fly: number; delay: number }[] = [];
 
   for (let x = 0; x < N; x++) {
     for (let y = 0; y < N; y++) {
@@ -95,6 +95,10 @@ onMounted(() => {
           dir: small.position.clone().normalize(),
           d: 0,
           v: 0,
+          // variación por cubito: distancia de vuelo y retardo escalonado → la
+          // dispersión se nota (no todos salen igual ni al mismo tiempo).
+          fly: 0.7 + Math.random() * 0.6,
+          delay: Math.random() * 0.35,
         });
       }
     }
@@ -435,7 +439,7 @@ onMounted(() => {
     const separate = ss(seg(0.77, 0.84)); // los tubos se sueltan del cubo y caen
     const boardDown = ss(seg(0.84, 0.89)); // la placa (y sus tubos) baja y desaparece
     const dropY = -16 * boardDown;
-    const explode = ss(seg(0.95, 1)); // FASE 5: los cubitos salen volando → estrella
+    const explode = ss(seg(0.93, 1)); // FASE 5: dispersión amplia y gradual → estrella
 
     const MIN_RATIO = 0.42; // tamaño mínimo (≈ imagen de referencia), no desaparece
     const SINK = 0.75; // cuánto se hunde la cara inferior en el chip
@@ -492,16 +496,22 @@ onMounted(() => {
       c.d += c.v * dt;
       if (c.d < 0) { c.d = 0; c.v = 0; }
       if (c.d > MAX_OUT) { c.d = MAX_OUT; c.v = 0; }
-      // FASE 5: los cubitos salen volando hacia afuera y se encogen a 0
-      c.mesh.position.copy(c.home).addScaledVector(c.dir, c.d + explode * 8);
-      c.mesh.scale.setScalar(1 - explode);
+      // FASE 5: dispersión LENTA y escalonada — cada cubito arranca con un retardo
+      // (c.delay) y vuela una distancia propia (c.fly); easing suave y progresivo.
+      const le = explode <= c.delay ? 0 : (explode - c.delay) / (1 - c.delay);
+      const fe = le * le * (3 - 2 * le); // smoothstep local
+      c.mesh.position.copy(c.home).addScaledVector(c.dir, c.d + fe * 6 * c.fly);
+      c.mesh.scale.setScalar(1 - fe);
     }
 
-    // FASE 5: queda una estrella de luz (el núcleo) en el centro
-    (starGlow.material as THREE.SpriteMaterial).opacity = explode;
-    starGlow.scale.setScalar(0.5 + explode * 3);
+    // FASE 5: la estrella emerge UN POCO DESPUÉS de empezar la dispersión (para
+    // que primero se vea separarse los cubos y luego brille el core).
+    const starT = Math.min(Math.max((explode - 0.3) / 0.7, 0), 1);
+    const starE = starT * starT * (3 - 2 * starT);
+    (starGlow.material as THREE.SpriteMaterial).opacity = starE;
+    starGlow.scale.setScalar(0.5 + starE * 3);
     core.scale.setScalar(1 - explode * 0.78); // el núcleo se reduce a un punto
-    coreLight.intensity = 2.5 + explode * 4;
+    coreLight.intensity = 2.5 + starE * 4;
 
     composer.render();
   }

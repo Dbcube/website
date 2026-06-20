@@ -401,7 +401,7 @@ const clouds = [
           <div class="bench__op">{{ row.op }}</div>
           <div class="bench__lines">
             <div class="bench__line">
-              <span class="bench__name bench__name--db">DBCube</span>
+              <span class="bench__name bench__name--db">Dbcube</span>
               <div class="bench__track"><div class="bench__fill bench__fill--db" :style="{ width: row.dbW + '%' }" /></div>
               <span class="bench__num bench__num--db">{{ row.db }} ms</span>
             </div>
@@ -722,7 +722,7 @@ const clouds = [
 .feat__title { font-weight: 700; font-size: 1.1rem; margin-bottom: 0.4rem; }
 .feat__desc { color: var(--muted); font-size: 0.92rem; line-height: 1.55; }
 
-/* ── COMPARISON (barras DBCube vs Prisma) ── */
+/* ── COMPARISON (barras Dbcube vs Prisma) ── */
 .bench { max-width: 56rem; margin: 0 auto; display: flex; flex-direction: column; gap: 1.5rem; }
 .bench__row {
   display: grid; grid-template-columns: 13rem 1fr 7rem; gap: 1.4rem; align-items: center;

@@ -9,7 +9,7 @@ type Demo = {
   output: string[];
 };
 
-// Demos curados — código real de DBCube y una salida representativa (mock,
+// Demos curados — código real de Dbcube y una salida representativa (mock,
 // no se conecta a ninguna base de datos).
 const demos: Demo[] = [
   {

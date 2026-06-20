@@ -13,6 +13,7 @@ const navLinks = [
   { label: "Performance", to: "/performance/overview" },
   { label: "Examples", to: "/examples/overview" },
   { label: "CLI", to: "/cli/overview" },
+  { label: "Blog", to: "/blog" },
 ];
 
 // Logo según el tema (reactivo e instantáneo)

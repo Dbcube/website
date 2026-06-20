@@ -1,7 +1,8 @@
 ---
 seo:
-  title: DBCube — The fastest ORM for Node.js
-  description: DBCube is the type-safe, Rust-powered ORM for MySQL, PostgreSQL, SQLite, MongoDB and Turso. Faster than Prisma on every operation in our reproducible benchmark. The drop-in upgrade.
+  title: "Dbcube — The ORM that outruns them all"
+  description: "Dbcube is the type-safe, Rust-powered ORM for PostgreSQL, MySQL, SQLite and MongoDB — and it works with Supabase, Turso and other managed hosts. Faster than Prisma on every operation in our reproducible benchmark."
+  ogImage: https://dbcube.dev/home.png
 ---
 
 ::home-landing

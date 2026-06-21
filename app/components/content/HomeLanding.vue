@@ -14,6 +14,10 @@ const isDark = computed(() => colorMode.value === "dark");
 const heroEl = ref<HTMLElement | null>(null);
 const progress = ref(0);
 const isMobile = ref(false); // < 860px: el split escritorio se centra/apila
+// Mismo factor que `fitZoom` en BlackHoleCube: cuánto se aleja la cámara en
+// vertical (1 en horizontal). El board se ve ~1/boardFit más pequeño, así que el
+// overlay de bases de datos se escala por 1/boardFit para seguir alineado.
+const boardFit = ref(1);
 
 let onScroll: (() => void) | null = null;
 let onResize: (() => void) | null = null;
@@ -29,7 +33,16 @@ onMounted(() => {
     progress.value = trackLen > 0 ? Math.min(Math.max(scrolled / trackLen, 0), 1) : 0;
   };
   onScroll = () => requestAnimationFrame(compute);
-  onResize = () => { isMobile.value = window.innerWidth < 860; compute(); };
+  onResize = () => {
+    isMobile.value = window.innerWidth < 860;
+    // mismo cálculo que computeFit() en BlackHoleCube (DESIGN_ASPECT = 1.35),
+    // aplicando el MISMO alivio cenital del 45% (la fase 2 usa menos zoom).
+    const stageHpx = window.innerHeight - headerPx;
+    const a = window.innerWidth / Math.max(stageHpx, 1);
+    const rawFit = a >= 1.35 ? 1 : Math.min(1.35 / a, 2.1);
+    boardFit.value = 1 + (rawFit - 1) * (1 - 0.45);
+    compute();
+  };
   onResize();
   window.addEventListener("scroll", onScroll, { passive: true });
   window.addEventListener("resize", onResize, { passive: true });
@@ -88,30 +101,41 @@ const terminalOut = computed(() => seg(0.93, 0.96)); // el terminal se va
 const poweredIn = computed(() => seg(0.96, 1)); // aparece "Powered by Rust"
 
 // canvas: centra al acomodarse; en F4 va a la IZQUIERDA y baja; en F5 vuelve al centro (X)
-// En móvil el cubo va CENTRADO (sin offset horizontal del split de escritorio).
 const canvasStyle = computed(() => {
   const k = 1 - flatten.value;
-  const xBase = isMobile.value ? 0 : 25;
-  const xLeft = isMobile.value ? 0 : 16;
-  const x = xBase * k - xLeft * cubeLeftT.value * (1 - cubeCenterT.value);
-  // F4 baja para alinear con el terminal; en F5 sube de nuevo (estrella más arriba).
-  // En móvil el cubo sube (no hay sitio lateral) y se desvanece bajo el terminal.
-  const yLeft = isMobile.value ? -52 : 20;
-  const y = -7 * k + yLeft * cubeLeftT.value - (isMobile.value ? 0 : 13) * cubeCenterT.value;
-  const style: Record<string, string> = { transform: `translate(${x}%, ${y}%)` };
+
   if (isMobile.value) {
-    // se apaga (casi del todo) mientras el terminal ocupa la pantalla; vuelve
-    // para "Powered by Rust". Usa el inicio de cubeLeft para apagar pronto.
-    const fade = cubeLeftT.value * (1 - poweredIn.value);
-    style.opacity = String(1 - 0.95 * fade);
+    // ── MÓVIL ── El cubo va siempre centrado en X. En Y: fase 1 arriba (texto
+    // abajo), fase 4 arriba (terminal abajo), fase 5 centrado bajo el título.
+    // El TAMAÑO lo ajusta la cámara (fitZoom) en todas las fases → fluido.
+    const phase1 = -16 * k;
+    // fase 4: el cubo (pequeño) baja para quedar cerca del título (menos hueco).
+    const phase4up = -16 * cubeLeftT.value * (1 - cubeCenterT.value);
+    const phase5 = 4 * cubeCenterT.value; // baja un poco en la fase 5
+    const y = phase1 + phase4up + phase5;
+    return { transform: `translate(0%, ${y}%)` };
   }
-  return style;
+
+  // ── DESKTOP ── split: cubo a la derecha (F1), izquierda (F4), centro (F5)
+  const x = 25 * k - 16 * cubeLeftT.value * (1 - cubeCenterT.value);
+  const y = -7 * k + 20 * cubeLeftT.value - 13 * cubeCenterT.value;
+  return { transform: `translate(${x}%, ${y}%)` };
 });
-// banner: sube y se va mientras la placa se acomoda. En móvil va centrado (sin 30%).
-const contentStyle = computed(() => ({
-  transform: `translate(${isMobile.value ? 0 : 30}%, ${-flatten.value * 60}vh)`,
-  opacity: 1 - Math.min(flatten.value * 1.4, 1),
-}));
+// El overlay NO se escala: los iconos quedan a tamaño completo. Solo los tubos
+// (connectors) reposicionan su anclaje al borde del board más pequeño (vía boardFit).
+const dbnetStyle = computed(() => ({}));
+// banner: sube y se va mientras la placa se acomoda. En desktop corrido 30% a la
+// derecha; en móvil centrado y empujado a la MITAD INFERIOR en fase 1 (para no
+// solaparse con el cubo, que va arriba). El empujón se va al acomodarse la placa.
+const contentStyle = computed(() => {
+  const x = isMobile.value ? 0 : 30;
+  const down = isMobile.value ? 15 * (1 - flatten.value) : 0; // +15vh abajo en fase 1
+  const y = down - flatten.value * 60;
+  return {
+    transform: `translate(${x}%, ${y}vh)`,
+    opacity: 1 - Math.min(flatten.value * 1.4, 1),
+  };
+});
 // veil: solo hace falta en la fase 1 (texto sobre la izquierda); se desvanece
 // con el banner para no opacar el cubo/placa después.
 const veilStyle = computed(() => ({ opacity: 1 - flatten.value }));
@@ -171,10 +195,12 @@ const DBNET = [
 // la placa a cada caja; coords en px del stage → líneas rectas y puntos redondos.
 const connectors = computed(() => {
   const W = stageW.value, H = stageH.value, bh = 48;
+  const f = boardFit.value; // el board se ve 1/f más pequeño en vertical
   return DBNET.map((d) => {
-    const bx = W * (0.5 + d.hx * 0.3), by = H * (0.5 + d.hy * 0.27); // centro de la caja (más cerca)
-    const sx = W * (0.5 + d.hx * 0.1), sy = H * (0.5 + d.hy * 0.14); // arranca en el borde de la placa
-    const p1x = W * (0.5 + d.hx * 0.2), p1y = sy; // 1) horizontal
+    const bx = W * (0.5 + d.hx * 0.3), by = H * (0.5 + d.hy * 0.27); // centro de la caja (tamaño completo)
+    // el tubo arranca en el borde del board (que es 1/f más pequeño en móvil)
+    const sx = W * (0.5 + (d.hx * 0.1) / f), sy = H * (0.5 + (d.hy * 0.14) / f); // borde de la placa
+    const p1x = W * (0.5 + d.hx * 0.2), p1y = sy; // 1) horizontal hacia la caja
     const p2x = p1x, p2y = by; // 2) vertical
     const p3x = bx - d.hx * bh, p3y = by; // 3) horizontal corto → caja
     const dStr = `M ${sx} ${sy} L ${p1x} ${p1y} L ${p2x} ${p2y} L ${p3x} ${p3y}`;
@@ -294,7 +320,7 @@ const clouds = [
         <div class="hero__scroll" aria-hidden="true">↓ scroll</div>
 
         <!-- Overlay HTML/SVG: tubos en ángulo recto + cajas de bases de datos -->
-        <div class="dbnet" aria-hidden="true">
+        <div class="dbnet" aria-hidden="true" :style="dbnetStyle">
           <svg class="dbnet__svg" :viewBox="`0 0 ${stageW} ${stageH}`" preserveAspectRatio="none" :style="{ opacity: dbnetOpacity }">
             <defs>
               <filter id="dbglow" x="-50%" y="-50%" width="200%" height="200%">
@@ -552,18 +578,30 @@ const clouds = [
     padding: 0 1.25rem;
   }
   .hero__content { max-width: 100%; }
-  .hero__cta { justify-content: center; }
   .hero__sub { margin-left: auto; margin-right: auto; }
-  /* veil centrado (el texto va sobre el cubo, no a la izquierda) */
+  /* En móvil el cubo va arriba y el texto abajo: oscurecemos fuerte la mitad
+     inferior para que el banner se lea limpio sobre el fondo. */
   .hero__veil {
     background:
-      radial-gradient(ellipse 80% 55% at 50% 50%, rgba(4, 5, 7, 0.72), transparent 80%),
-      linear-gradient(180deg, rgba(4, 5, 7, 0.5) 0%, transparent 30%, transparent 70%, rgba(4, 5, 7, 0.6) 100%);
+      linear-gradient(180deg, transparent 38%, rgba(4, 5, 7, 0.78) 62%, rgba(4, 5, 7, 0.94) 100%);
   }
   .hero__stats-head { top: 4%; }
-  .statcard { width: clamp(120px, 42vw, 165px); }
-  .statcard__num { font-size: clamp(1.8rem, 8vw, 2.6rem); }
-  .hero__powered { top: 56%; }
+  /* números sobre el cubo: scrim oscuro translúcido para que se lean */
+  .statcard {
+    width: clamp(118px, 40vw, 158px);
+    background: rgba(4, 6, 10, 0.55);
+    border: 1px solid rgba(34, 211, 238, 0.18);
+    border-radius: 14px;
+    padding: 0.6rem 0.5rem;
+    backdrop-filter: blur(6px);
+  }
+  .statcard__num { font-size: clamp(1.7rem, 7.5vw, 2.4rem); }
+  .statcard__lbl { font-size: 0.74rem; }
+  .hero__powered { top: 58%; }
+  /* botones del hero centrados (mayor especificidad para ganar a la regla base
+     `.hero__cta` que aparece después en el stylesheet) */
+  .dbx .hero__cta { justify-content: center; }
+  .dbx .hero__install { text-align: center; }
 }
 
 .hero__badge {
@@ -679,7 +717,9 @@ const clouds = [
 .pg__head .s2__title { font-size: clamp(1.6rem, 3.5vw, 2.6rem); }
 .pg__head .s2__sub { margin-top: 0.3rem; }
 @media (max-width: 860px) {
-  .hero__playground { position: absolute; left: 5%; right: 5%; width: auto; top: 54%; }
+  /* en móvil el bloque (título + terminal) se ancla por arriba (no centrado),
+     dejando libre el tercio superior para el cubo. */
+  .hero__playground { position: absolute; left: 5%; right: 5%; width: auto; top: 43%; transform: none; }
 }
 
 /* Fase 5 — "Powered by Rust" bajo la estrella */

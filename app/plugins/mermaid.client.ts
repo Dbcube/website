@@ -59,12 +59,35 @@ export default defineNuxtPlugin((nuxtApp) => {
     }
   }
 
+  // Prose code blocks (ProsePre) are ASYNC components — they can mount AFTER a
+  // single post-navigation scan. So besides scanning on mount/route change, we
+  // also watch the DOM for newly-inserted mermaid blocks and render those too.
+  let scheduled: ReturnType<typeof setTimeout> | null = null
   const schedule = () => {
-    // Wait for the DOM to settle after navigation/hydration.
-    setTimeout(() => { render() }, 100)
+    if (scheduled) clearTimeout(scheduled)
+    scheduled = setTimeout(() => { render() }, 120)
   }
 
-  nuxtApp.hook('app:mounted', schedule)
+  const watchDom = () => {
+    if (typeof document === 'undefined') return
+    const obs = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        for (const node of m.addedNodes) {
+          if (!(node instanceof HTMLElement)) continue
+          if (node.matches?.('pre.language-mermaid') || node.querySelector?.('pre.language-mermaid')) {
+            schedule()
+            return
+          }
+        }
+      }
+    })
+    obs.observe(document.body, { childList: true, subtree: true })
+  }
+
+  nuxtApp.hook('app:mounted', () => {
+    schedule()
+    watchDom()
+  })
   const router = useRouter()
   router.afterEach(() => schedule())
 })

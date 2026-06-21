@@ -42,6 +42,16 @@ onMounted(() => {
   const STATS_POS = new THREE.Vector3(4.5, 5.5, 12); // fase 3: vista angular dramática para los stats
   const STATS_TGT = new THREE.Vector3(0, 0.6, 0);
   const camTgt = new THREE.Vector3();
+
+  // En vertical (móvil) la cámara ve menos ANCHO, así que el board se recortaría.
+  // fitZoom aleja la cámara cuando el viewport es estrecho para que entre completo.
+  const DESIGN_ASPECT = 1.35;
+  let fitZoom = 1;
+  const computeFit = () => {
+    const a = w / h;
+    fitZoom = a >= DESIGN_ASPECT ? 1 : Math.min(DESIGN_ASPECT / a, 2.1);
+  };
+  computeFit();
   camera.position.copy(ISO_POS);
   camera.lookAt(ISO_TGT);
 
@@ -463,6 +473,19 @@ onMounted(() => {
     if (eStats > 0) camera.position.lerpVectors(TOP_FAR, STATS_POS, eStats);
     camTgt.lerpVectors(ISO_TGT, TOP_TGT, eFlat);
     if (eStats > 0) camTgt.lerpVectors(TOP_TGT, STATS_TGT, eStats);
+    // fitZoom (vertical) aleja la cámara para que el board entre completo. En la
+    // vista CENITAL (fase 2) el board es más angosto y no necesita tanto zoom, así
+    // que se alivia un 45% del exceso → board más grande (tubos cortos a las
+    // cajas). El cambio es suave (eFlat) → sigue siendo fluido. HomeLanding usa el
+    // mismo factor para anclar los tubos.
+    if (fitZoom > 1) {
+      const cenital = eFlat * (1 - eStats); // 1 en fase 2, 0 en ISO/stats
+      // En la fase 5 (explosión → "Powered by Rust") no hay overlay: acercamos
+      // para que el cubo/estrella se vea más grande.
+      const relief = Math.max(0.45 * cenital, 0.84 * explode);
+      const z = 1 + (fitZoom - 1) * (1 - relief);
+      camera.position.multiplyScalar(z);
+    }
     camera.lookAt(camTgt);
 
     // FASE 4: tubos caen (separate) y todo lo de la placa baja (dropY)
@@ -524,6 +547,7 @@ onMounted(() => {
     w = next.w; h = next.h;
     camera.aspect = w / h;
     camera.updateProjectionMatrix();
+    computeFit();
     renderer.setSize(w, h);
     composer.setSize(w, h);
   };

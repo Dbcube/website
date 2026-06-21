@@ -2,7 +2,9 @@
   "name": "docus-starter",
   "scripts": {
     "dev": "PORT=3502 nuxt dev --extends docus",
-    "build": "nuxt build --extends docus"
+    "build": "nuxt build --extends docus",
+    "generate": "nuxt generate --extends docus",
+    "preview": "nuxt preview"
   },
   "dependencies": {
     "@nuxt/content": "^3.7.1",

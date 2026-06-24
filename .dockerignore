@@ -1,14 +1,23 @@
+# Runtime-only image: we COPY the prebuilt .output, so DON'T ignore it.
+# Everything else (source, deps) is not needed in the image.
 node_modules
 .nuxt
-.output
 .data
 dist
 .git
 .gitignore
+app
+content
+content.config.ts
+nuxt.config.ts
+package.json
+bun.lock
+tsconfig.json
 *.log
 .DS_Store
 Thumbs.db
 README.md
+Dockerfile
 # local diagnostic/screenshot junk
 _*.png
 _*.cjs

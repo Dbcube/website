@@ -7,6 +7,21 @@ import { onMounted, onBeforeUnmount, computed, ref } from "vue";
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === "dark");
 
+// Copiar el comando de instalación al portapapeles, con feedback breve.
+const installCmd = "npm install dbcube";
+const copied = ref(false);
+let copyTimer: ReturnType<typeof setTimeout> | null = null;
+const copyInstall = async () => {
+  try {
+    await navigator.clipboard.writeText(installCmd);
+    copied.value = true;
+    if (copyTimer) clearTimeout(copyTimer);
+    copyTimer = setTimeout(() => (copied.value = false), 1600);
+  } catch {
+    /* clipboard no disponible (contexto no seguro / permisos): ignorar */
+  }
+};
+
 // ── Scrollytelling del hero ──
 // El `.hero` es un track alto; su `.hero__stage` queda pineado (sticky) mientras
 // se recorre el track. `progress` (0→1) mide cuánto se ha avanzado dentro del
@@ -314,6 +329,16 @@ const clouds = [
 
           <div class="hero__install" data-reveal>
             <code><span class="hero__dollar">$</span> npm install dbcube</code>
+            <button
+              class="copy-btn"
+              type="button"
+              :aria-label="copied ? 'Command copied' : 'Copy command'"
+              :title="copied ? 'Copied!' : 'Copy'"
+              @click="copyInstall"
+            >
+              <UIcon :name="copied ? 'i-lucide-check' : 'i-lucide-copy'" class="copy-btn__icon" />
+              <span class="copy-btn__label">{{ copied ? 'Copied' : 'Copy' }}</span>
+            </button>
           </div>
         </div>
 
@@ -467,7 +492,19 @@ const clouds = [
     <section class="final" data-reveal>
       <h2 class="final__title">Ready to be the fastest?</h2>
       <p class="final__sub">Build your first query in under five minutes.</p>
-      <div class="final__install"><code><span class="hero__dollar">$</span> npm install dbcube</code></div>
+      <div class="final__install">
+        <code><span class="hero__dollar">$</span> npm install dbcube</code>
+        <button
+          class="copy-btn"
+          type="button"
+          :aria-label="copied ? 'Command copied' : 'Copy command'"
+          :title="copied ? 'Copied!' : 'Copy'"
+          @click="copyInstall"
+        >
+          <UIcon :name="copied ? 'i-lucide-check' : 'i-lucide-copy'" class="copy-btn__icon" />
+          <span class="copy-btn__label">{{ copied ? 'Copied' : 'Copy' }}</span>
+        </button>
+      </div>
       <div class="hero__cta">
         <NuxtLink to="/getting-started/introduction" class="btn btn--primary">Read the docs →</NuxtLink>
         <a href="https://github.com/Dbcube" target="_blank" class="btn btn--ghost">View on GitHub</a>
@@ -648,7 +685,7 @@ const clouds = [
 .btn--primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 55px -5px var(--cyan); }
 .btn--ghost { border: 1px solid var(--border); color: var(--fg); background: var(--card); }
 .btn--ghost:hover { transform: translateY(-2px); border-color: var(--cyan); }
-.hero__install { margin-top: 2.2rem; font-family: ui-monospace, monospace; font-size: 0.9rem; }
+.hero__install { margin-top: 2.2rem; font-family: ui-monospace, monospace; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; }
 .hero__install code {
   display: inline-flex; align-items: center;
   padding: 0.6rem 1.3rem; border-radius: 999px;
@@ -659,6 +696,22 @@ const clouds = [
   box-shadow: 0 0 24px rgba(34, 211, 238, 0.12);
 }
 .hero__dollar { color: var(--cyan); margin-right: 0.6rem; font-weight: 700; }
+
+/* Botón "copiar comando" al lado del npm install (hero + CTA final) */
+.copy-btn {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  padding: 0.5rem 0.8rem; border-radius: 999px; cursor: pointer;
+  font-family: inherit; font-size: 0.8rem; line-height: 1;
+  color: #cfe8f2;
+  border: 1px solid color-mix(in srgb, var(--cyan) 30%, transparent);
+  background: rgba(8, 14, 20, 0.7);
+  backdrop-filter: blur(8px);
+  transition: color 0.15s ease, border-color 0.15s ease, background 0.15s ease, transform 0.08s ease;
+}
+.copy-btn:hover { color: #fff; border-color: color-mix(in srgb, var(--cyan) 60%, transparent); background: rgba(34, 211, 238, 0.12); }
+.copy-btn:active { transform: translateY(1px); }
+.copy-btn__icon { width: 1rem; height: 1rem; }
+.copy-btn__label { font-weight: 600; letter-spacing: 0.02em; }
 .hero__scroll {
   position: absolute; bottom: 5%; left: 50%; z-index: 2;
   font-size: 0.75rem; letter-spacing: 0.1em; color: var(--muted);
@@ -827,6 +880,6 @@ const clouds = [
 .final .hero__cta { justify-content: center; }
 .final__title { font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; }
 .final__sub { color: var(--muted); margin: 0.8rem 0 1.8rem; font-size: 1.1rem; }
-.final__install { margin-bottom: 2rem; font-family: ui-monospace, monospace; }
+.final__install { margin-bottom: 2rem; font-family: ui-monospace, monospace; display: inline-flex; align-items: center; gap: 0.5rem; }
 .final__install code { padding: 0.7rem 1.3rem; border-radius: 8px; border: 1px solid var(--border); background: var(--card); }
 </style>

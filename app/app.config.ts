@@ -1,8 +1,12 @@
 export default defineAppConfig({
+  // Tema bloqueado en oscuro: en Docus un `colorMode` con valor NO vacío se
+  // considera "forzado", lo que oculta el UColorModeButton (toggle dark/light)
+  // tanto del header como del footer. Coincide con el plugin force-dark.
+  docus: {
+    colorMode: 'dark',
+  },
   socials: {
-    x: 'https://x.com/nuxt_js',
-    discord: 'https://discord.com/invite/ps2h6QT',
-    nuxt: 'https://nuxt.com',
+    x: 'https://x.com/dbcubeorm',
   },
   github: {
     rootDir: 'docs',

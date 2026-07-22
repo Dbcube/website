@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import { onMounted, onBeforeUnmount, computed, ref } from "vue";
 
-// Tema: usamos el color-mode de Nuxt directamente para alternar las variables,
-// sin depender de que el selector global `.dark` quede como ancestro del
-// contenido renderizado por MDC (que a veces no aplica dentro de scoped CSS).
+// Tema: usamos el color-mode de Nuxt para alternar variables dentro de MDC.
 const colorMode = useColorMode();
 const isDark = computed(() => colorMode.value === "dark");
+
+// ── Fondo animado del hero (LetterGlitch) — parámetros del panel de diseño ──
+const glitchColors = ["#06B6D4", "#3B82F6", "#61b3dc"];
 
 // Copiar el comando de instalación al portapapeles, con feedback breve.
 const installCmd = "npm install dbcube";
@@ -18,236 +19,9 @@ const copyInstall = async () => {
     if (copyTimer) clearTimeout(copyTimer);
     copyTimer = setTimeout(() => (copied.value = false), 1600);
   } catch {
-    /* clipboard no disponible (contexto no seguro / permisos): ignorar */
+    /* clipboard no disponible: ignorar */
   }
 };
-
-// ── Scrollytelling del hero ──
-// El `.hero` es un track alto; su `.hero__stage` queda pineado (sticky) mientras
-// se recorre el track. `progress` (0→1) mide cuánto se ha avanzado dentro del
-// track y se usa para que el cubo descienda, encoja y entre al chip.
-const heroEl = ref<HTMLElement | null>(null);
-const progress = ref(0);
-const isMobile = ref(false); // < 860px: el split escritorio se centra/apila
-// Mismo factor que `fitZoom` en BlackHoleCube: cuánto se aleja la cámara en
-// vertical (1 en horizontal). El board se ve ~1/boardFit más pequeño, así que el
-// overlay de bases de datos se escala por 1/boardFit para seguir alineado.
-const boardFit = ref(1);
-
-let onScroll: (() => void) | null = null;
-let onResize: (() => void) | null = null;
-onMounted(() => {
-  const headerPx =
-    parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--ui-header-height")) || 64;
-  const compute = () => {
-    const el = heroEl.value;
-    if (!el) return;
-    const stageH = window.innerHeight - headerPx; // alto del stage pineado
-    const trackLen = el.offsetHeight - stageH; // distancia que el stage permanece pineado
-    const scrolled = headerPx - el.getBoundingClientRect().top; // cuánto se avanzó en el track
-    progress.value = trackLen > 0 ? Math.min(Math.max(scrolled / trackLen, 0), 1) : 0;
-  };
-  onScroll = () => requestAnimationFrame(compute);
-  onResize = () => {
-    isMobile.value = window.innerWidth < 860;
-    // mismo cálculo que computeFit() en BlackHoleCube (DESIGN_ASPECT = 1.35),
-    // aplicando el MISMO alivio cenital del 45% (la fase 2 usa menos zoom).
-    const stageHpx = window.innerHeight - headerPx;
-    const a = window.innerWidth / Math.max(stageHpx, 1);
-    const rawFit = a >= 1.35 ? 1 : Math.min(1.35 / a, 2.1);
-    boardFit.value = 1 + (rawFit - 1) * (1 - 0.45);
-    compute();
-  };
-  onResize();
-  window.addEventListener("scroll", onScroll, { passive: true });
-  window.addEventListener("resize", onResize, { passive: true });
-});
-onBeforeUnmount(() => {
-  if (onScroll) window.removeEventListener("scroll", onScroll);
-  if (onResize) window.removeEventListener("resize", onResize);
-});
-
-// ── Remapeo del scroll con "holds" ──
-// Tras cada fase se inserta una meseta (hold): el progreso de animación se
-// congela mientras se sigue scrolleando, para apreciar el diseño antes de
-// continuar. NO cambia los umbrales: solo añade pausas en esos puntos de reposo.
-const HOLDS = [0.18, 0.4, 0.52, 0.77, 0.93]; // puntos donde cada fase "ya se acomodó"
-const HOLD_W = 6; // peso (scroll extra) de cada pausa
-const SEGMENTS = (() => {
-  const pts = [0, ...HOLDS, 1];
-  const segs: { a: number; b: number; w: number; hold: boolean; r0: number; r1: number }[] = [];
-  for (let i = 0; i < pts.length - 1; i++) {
-    const a = pts[i], b = pts[i + 1];
-    // el último tramo (dispersión + core) recibe MÁS scroll para que sea lento
-    const w = (b - a) * 100 * (b === 1 ? 3.2 : 1);
-    segs.push({ a, b, w, hold: false, r0: 0, r1: 0 });
-    if (b < 1) segs.push({ a: b, b, w: HOLD_W, hold: true, r0: 0, r1: 0 });
-  }
-  const total = segs.reduce((s, x) => s + x.w, 0);
-  let acc = 0;
-  for (const s of segs) { s.r0 = acc / total; acc += s.w; s.r1 = acc / total; }
-  return segs;
-})();
-const animProgress = computed(() => {
-  const raw = progress.value;
-  for (const s of SEGMENTS) {
-    if (raw <= s.r1 || s === SEGMENTS[SEGMENTS.length - 1]) {
-      if (s.hold) return s.a;
-      const t = (raw - s.r0) / (s.r1 - s.r0 || 1);
-      return s.a + (s.b - s.a) * Math.min(Math.max(t, 0), 1);
-    }
-  }
-  return 1;
-});
-
-// Los umbrales operan sobre el progreso REMAPEADO (mismos valores que BlackHoleCube).
-const seg = (a: number, b: number) => Math.min(Math.max((animProgress.value - a) / (b - a), 0), 1);
-const flatten = computed(() => seg(0.22, 0.36)); // la placa se acomoda
-const dbDrawIn = computed(() => seg(0.43, 0.5)); // los tubos se dibujan
-const dbRetract = computed(() => seg(0.54, 0.6)); // los tubos se retraen (reversa)
-const dashFactor = computed(() => 1 - dbDrawIn.value - dbRetract.value); // 1→0 (dibuja) → -1 (retrae)
-const statsIn = computed(() => seg(0.69, 0.76)); // los números aparecen ya posicionado
-const statsOut = computed(() => seg(0.78, 0.82)); // los números se van al iniciar la fase 4
-const cubeLeftT = computed(() => seg(0.87, 0.91)); // el cubo se va a la izquierda
-const terminalIn = computed(() => seg(0.89, 0.92)); // aparece el terminal a la derecha
-// FASE 5: el cubo vuelve al centro, el terminal se va, los cubitos explotan
-const cubeCenterT = computed(() => seg(0.93, 0.97)); // el cubo regresa al centro (revierte la X)
-const terminalOut = computed(() => seg(0.93, 0.96)); // el terminal se va
-const poweredIn = computed(() => seg(0.96, 1)); // aparece "Powered by Rust"
-
-// canvas: centra al acomodarse; en F4 va a la IZQUIERDA y baja; en F5 vuelve al centro (X)
-const canvasStyle = computed(() => {
-  const k = 1 - flatten.value;
-
-  if (isMobile.value) {
-    // ── MÓVIL ── El cubo va siempre centrado en X. En Y: fase 1 arriba (texto
-    // abajo), fase 4 arriba (terminal abajo), fase 5 centrado bajo el título.
-    // El TAMAÑO lo ajusta la cámara (fitZoom) en todas las fases → fluido.
-    const phase1 = -16 * k;
-    // fase 4: el cubo (pequeño) baja para quedar cerca del título (menos hueco).
-    const phase4up = -16 * cubeLeftT.value * (1 - cubeCenterT.value);
-    const phase5 = 4 * cubeCenterT.value; // baja un poco en la fase 5
-    const y = phase1 + phase4up + phase5;
-    return { transform: `translate(0%, ${y}%)` };
-  }
-
-  // ── DESKTOP ── split: cubo a la derecha (F1), izquierda (F4), centro (F5)
-  const x = 25 * k - 16 * cubeLeftT.value * (1 - cubeCenterT.value);
-  const y = -7 * k + 20 * cubeLeftT.value - 13 * cubeCenterT.value;
-  return { transform: `translate(${x}%, ${y}%)` };
-});
-// El overlay NO se escala: los iconos quedan a tamaño completo. Solo los tubos
-// (connectors) reposicionan su anclaje al borde del board más pequeño (vía boardFit).
-const dbnetStyle = computed(() => ({}));
-// banner: sube y se va mientras la placa se acomoda. En desktop corrido 30% a la
-// derecha; en móvil centrado y empujado a la MITAD INFERIOR en fase 1 (para no
-// solaparse con el cubo, que va arriba). El empujón se va al acomodarse la placa.
-const contentStyle = computed(() => {
-  const x = isMobile.value ? 0 : 30;
-  const down = isMobile.value ? 15 * (1 - flatten.value) : 0; // +15vh abajo en fase 1
-  const y = down - flatten.value * 60;
-  return {
-    transform: `translate(${x}%, ${y}vh)`,
-    opacity: 1 - Math.min(flatten.value * 1.4, 1),
-  };
-});
-// veil: solo hace falta en la fase 1 (texto sobre la izquierda); se desvanece
-// con el banner para no opacar el cubo/placa después.
-const veilStyle = computed(() => ({ opacity: 1 - flatten.value }));
-// título "One core, every database": entra con las bases de datos y se va al retraer
-const section2Style = computed(() => ({
-  opacity: seg(0.45, 0.5) * (1 - seg(0.54, 0.6)),
-}));
-
-// FASE 3 — stats de rendimiento (4 datos alrededor del cubo flotante)
-// Desktop: a los lados (x 15/85). Móvil: 2 arriba / 2 abajo, cerca del centro.
-const STATS_DESKTOP = [
-  { num: "0.73ms", label: "primary-key read", x: 15, y: 33 },
-  { num: "100%", label: "type-safe queries", x: 15, y: 66 },
-  { num: "5", label: "databases, one API", x: 85, y: 33 },
-  { num: "1-RTT", label: "atomic transactions", x: 85, y: 66 },
-];
-const STATS_MOBILE = [
-  { num: "0.73ms", label: "primary-key read", x: 27, y: 24 },
-  { num: "100%", label: "type-safe queries", x: 73, y: 24 },
-  { num: "5", label: "databases, one API", x: 27, y: 78 },
-  { num: "1-RTT", label: "atomic transactions", x: 73, y: 78 },
-];
-const STATS = computed(() => (isMobile.value ? STATS_MOBILE : STATS_DESKTOP));
-const statsStyle = computed(() => ({ opacity: statsIn.value * (1 - statsOut.value) }));
-
-// FASE 5 — "Powered by Rust" bajo la estrella
-const poweredStyle = computed(() => ({ opacity: poweredIn.value }));
-
-// FASE 4 — terminal "See it move" a la derecha (el cubo queda a la izquierda)
-const terminalStyle = computed(() => ({
-  opacity: terminalIn.value * (1 - terminalOut.value),
-  pointerEvents: terminalIn.value > 0.6 && terminalOut.value < 0.3 ? "auto" : "none",
-}));
-
-// ── Overlay HTML/SVG de las bases de datos (sobre el canvas, ángulos rectos) ──
-const stageEl = ref<HTMLElement | null>(null);
-const stageW = ref(1280);
-const stageH = ref(720);
-let stageRO: ResizeObserver | null = null;
-onMounted(() => {
-  const el = stageEl.value;
-  if (!el) return;
-  const measure = () => { stageW.value = el.clientWidth; stageH.value = el.clientHeight; };
-  measure();
-  stageRO = new ResizeObserver(measure);
-  stageRO.observe(el);
-});
-onBeforeUnmount(() => stageRO?.disconnect());
-
-const DBNET = [
-  { logo: "/logos/postgresql.svg", label: "PostgreSQL", hx: -1, hy: -1 },
-  { logo: "/logos/mysql.svg", label: "MySQL", hx: 1, hy: -1 },
-  { logo: "/logos/mongodb.svg", label: "MongoDB", hx: -1, hy: 1 },
-  { logo: "/logos/sqlite.svg", label: "SQLite", hx: 1, hy: 1 },
-];
-// Conectores en ángulo recto (horizontal → vertical → horizontal) del borde de
-// la placa a cada caja; coords en px del stage → líneas rectas y puntos redondos.
-const connectors = computed(() => {
-  const W = stageW.value, H = stageH.value, bh = 48;
-  const f = boardFit.value; // el board se ve 1/f más pequeño en vertical
-  return DBNET.map((d) => {
-    const bx = W * (0.5 + d.hx * 0.3), by = H * (0.5 + d.hy * 0.27); // centro de la caja (tamaño completo)
-    // el tubo arranca en el borde del board (que es 1/f más pequeño en móvil)
-    const sx = W * (0.5 + (d.hx * 0.1) / f), sy = H * (0.5 + (d.hy * 0.14) / f); // borde de la placa
-    const p1x = W * (0.5 + d.hx * 0.2), p1y = sy; // 1) horizontal hacia la caja
-    const p2x = p1x, p2y = by; // 2) vertical
-    const p3x = bx - d.hx * bh, p3y = by; // 3) horizontal corto → caja
-    const dStr = `M ${sx} ${sy} L ${p1x} ${p1y} L ${p2x} ${p2y} L ${p3x} ${p3y}`;
-    const len =
-      Math.hypot(p1x - sx, p1y - sy) + Math.hypot(p2x - p1x, p2y - p1y) + Math.hypot(p3x - p2x, p3y - p2y);
-    return { ...d, bx, by, d: dStr, len };
-  });
-});
-// Tubos: visibles mientras se dibujan y se retraen (la geometría hace el efecto,
-// la opacidad solo limpia al final). Cajas/pulsos se ocultan durante la retracción.
-const dbnetOpacity = computed(() => dbDrawIn.value * (1 - seg(0.6, 0.63)));
-const pulseOpacity = computed(() => seg(0.49, 0.54) * (1 - seg(0.54, 0.57)));
-const boxOpacity = computed(() => seg(0.47, 0.53) * (1 - seg(0.54, 0.59)));
-
-// Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
-let observer: IntersectionObserver | null = null;
-onMounted(() => {
-  const els = document.querySelectorAll<HTMLElement>("[data-reveal]");
-  observer = new IntersectionObserver(
-    (entries) => {
-      for (const e of entries) {
-        if (e.isIntersecting) {
-          e.target.classList.add("is-visible");
-          observer?.unobserve(e.target);
-        }
-      }
-    },
-    { threshold: 0.12 }
-  );
-  els.forEach((el) => observer!.observe(el));
-});
-onBeforeUnmount(() => observer?.disconnect());
 
 const features = [
   { icon: "i-lucide-database", title: "Multi-database", desc: "MySQL, PostgreSQL, SQLite, MongoDB and Turso — one fluent API across every engine." },
@@ -268,7 +42,6 @@ const compare: { op: string; db: number; prisma: number }[] = [
   { op: "Bulk INSERT 1,000 rows", db: 16.5, prisma: 23.6 },
   { op: "100 concurrent lookups", db: 8.29, prisma: 9.35 },
 ];
-// barras relativas al máximo de cada fila (menor = mejor) + chip de aceleración
 const compareRows = computed(() =>
   compare.map((r) => {
     const max = Math.max(r.db, r.prisma);
@@ -292,137 +65,98 @@ const clouds = [
   { name: "Turso", kind: "libSQL" },
   { name: "AWS RDS", kind: "Postgres / MySQL" },
 ];
+
+// Scroll-reveal: añade .is-visible a [data-reveal] al entrar en viewport.
+let observer: IntersectionObserver | null = null;
+onMounted(() => {
+  const els = document.querySelectorAll<HTMLElement>("[data-reveal]");
+  observer = new IntersectionObserver(
+    (entries) => {
+      for (const e of entries) {
+        if (e.isIntersecting) {
+          e.target.classList.add("is-visible");
+          observer?.unobserve(e.target);
+        }
+      }
+    },
+    { threshold: 0.12 }
+  );
+  els.forEach((el) => observer!.observe(el));
+});
+onBeforeUnmount(() => observer?.disconnect());
 </script>
 
 <template>
   <div class="dbx" :class="{ 'dbx--dark': isDark }">
-    <!-- ════════ HERO (track alto; el stage se queda pineado durante el scroll) ════════ -->
-    <section ref="heroEl" class="hero">
-      <div ref="stageEl" class="hero__stage">
-        <div class="hero__canvas" :style="canvasStyle">
-          <ClientOnly>
-            <BlackHoleCube :progress="animProgress" />
-          </ClientOnly>
-        </div>
-        <div class="hero__veil" :style="veilStyle" />
+    <!-- ════════ HERO — banner estático con fondo LetterGlitch ════════ -->
+    <section class="hero">
+      <div class="hero__bg" aria-hidden="true">
+        <ClientOnly>
+          <LetterGlitch
+            :glitch-colors="glitchColors"
+            :glitch-speed="45"
+            :smooth="true"
+            :center-vignette="true"
+            :outer-vignette="true"
+          />
+        </ClientOnly>
+      </div>
+      <div class="hero__scrim" aria-hidden="true" />
 
-        <div class="hero__content" :style="contentStyle">
-          <h1 class="hero__title" data-reveal>
-            The ORM that<br />
-            <span class="hero__grad">outruns them all.</span>
-          </h1>
+      <div class="hero__content">
+        <span class="hero__chip" data-reveal>
+          <span class="hero__chip-dot" />
+          Rust-powered engine · v1.1.3
+        </span>
 
-          <p class="hero__sub" data-reveal>
-            A type-safe, Rust-powered engine for PostgreSQL, MySQL, SQLite,
-            MongoDB &amp; Turso. <strong>One API for every database</strong> — and the
-            shortest path from your code to your data.
-          </p>
+        <h1 class="hero__title" data-reveal>
+          The ORM that<br />
+          <span class="hero__grad">outruns them all.</span>
+        </h1>
 
-          <div class="hero__cta" data-reveal>
-            <NuxtLink to="/getting-started/installation" class="btn btn--primary">
-              Get started →
-            </NuxtLink>
-            <a href="https://github.com/Dbcube" target="_blank" class="btn btn--ghost">
-              Star on GitHub
-            </a>
-          </div>
+        <p class="hero__sub" data-reveal>
+          A type-safe, Rust-powered engine for PostgreSQL, MySQL, SQLite,
+          MongoDB &amp; Turso. <strong>One API for every database</strong> — and the
+          shortest path from your code to your data.
+        </p>
 
-          <div class="hero__install" data-reveal>
-            <code><span class="hero__dollar">$</span> npm install dbcube</code>
-            <button
-              class="copy-btn"
-              type="button"
-              :aria-label="copied ? 'Command copied' : 'Copy command'"
-              :title="copied ? 'Copied!' : 'Copy'"
-              @click="copyInstall"
-            >
-              <UIcon :name="copied ? 'i-lucide-check' : 'i-lucide-copy'" class="copy-btn__icon" />
-              <span class="copy-btn__label">{{ copied ? 'Copied' : 'Copy' }}</span>
-            </button>
-          </div>
+        <div class="hero__cta" data-reveal>
+          <NuxtLink to="/getting-started/installation" class="btn btn--primary">
+            Get started →
+          </NuxtLink>
+          <a href="https://github.com/Dbcube" target="_blank" class="btn btn--ghost">
+            Star on GitHub
+          </a>
         </div>
 
-        <div class="hero__scroll" aria-hidden="true">↓ scroll</div>
-
-        <!-- Overlay HTML/SVG: tubos en ángulo recto + cajas de bases de datos -->
-        <div class="dbnet" aria-hidden="true" :style="dbnetStyle">
-          <svg class="dbnet__svg" :viewBox="`0 0 ${stageW} ${stageH}`" preserveAspectRatio="none" :style="{ opacity: dbnetOpacity }">
-            <defs>
-              <filter id="dbglow" x="-50%" y="-50%" width="200%" height="200%">
-                <feGaussianBlur stdDeviation="2.5" result="b" />
-                <feMerge><feMergeNode in="b" /><feMergeNode in="SourceGraphic" /></feMerge>
-              </filter>
-            </defs>
-            <g filter="url(#dbglow)">
-              <path
-                v-for="(c, i) in connectors"
-                :key="'l' + i"
-                :d="c.d"
-                fill="none"
-                stroke="#7fe0ff"
-                stroke-width="2.5"
-                stroke-linejoin="round"
-                stroke-linecap="round"
-                :stroke-dasharray="c.len"
-                :stroke-dashoffset="c.len * dashFactor"
-              />
-            </g>
-            <circle v-for="(c, i) in connectors" :key="'p' + i" r="4" fill="#ffffff" :opacity="pulseOpacity">
-              <animateMotion :dur="2 + i * 0.35 + 's'" repeatCount="indefinite" :path="c.d" />
-            </circle>
-          </svg>
-
-          <div
-            v-for="(c, i) in connectors"
-            :key="'b' + i"
-            class="dbnet__box"
-            :style="{ left: c.bx + 'px', top: c.by + 'px', opacity: boxOpacity }"
+        <div class="hero__install" data-reveal>
+          <code><span class="hero__dollar">$</span> npm install dbcube</code>
+          <button
+            class="copy-btn"
+            type="button"
+            :aria-label="copied ? 'Command copied' : 'Copy command'"
+            :title="copied ? 'Copied!' : 'Copy'"
+            @click="copyInstall"
           >
-            <img :src="c.logo" :alt="c.label" class="dbnet__logo" />
-            <span class="dbnet__label">{{ c.label }}</span>
-          </div>
-        </div>
-
-        <!-- Título de la sección 2 (placa + bases de datos) -->
-        <div class="hero__section2" :style="section2Style">
-          <h2 class="s2__title">One core, <span class="hero__grad">every database</span></h2>
-          <p class="s2__sub">PostgreSQL, MySQL, MongoDB and SQLite — one fluent API, one Rust engine.</p>
-        </div>
-
-        <!-- Sección 3: stats de rendimiento (cubo re-emerge + datos a los lados) -->
-        <div class="hero__stats" :style="statsStyle">
-          <div class="hero__stats-head">
-            <h2 class="s2__title">Engineered for <span class="hero__grad">raw speed</span></h2>
-          </div>
-          <div
-            v-for="(s, i) in STATS"
-            :key="'st' + i"
-            class="statcard"
-            :style="{ left: s.x + '%', top: s.y + '%' }"
-          >
-            <div class="statcard__num">{{ s.num }}</div>
-            <div class="statcard__lbl">{{ s.label }}</div>
-          </div>
-        </div>
-
-        <!-- FASE 4: terminal "See it move" a la derecha (el cubo queda a la izquierda) -->
-        <div class="hero__playground" :style="terminalStyle">
-          <div class="pg__head">
-            <h2 class="s2__title">See it <span class="hero__grad">move</span></h2>
-            <p class="s2__sub">The same fluent API for reads, writes, transactions and the CLI.</p>
-          </div>
-          <PlaygroundTerminal />
-        </div>
-
-        <!-- FASE 5: el cubo explota en una estrella + "Powered by Rust" -->
-        <div class="hero__powered" :style="poweredStyle">
-          <h2 class="s2__title">Powered by <span class="hero__grad">Rust</span></h2>
-          <p class="s2__sub">Our engine, compiled to the metal — raw, predictable speed under every query.</p>
+            <UIcon :name="copied ? 'i-lucide-check' : 'i-lucide-copy'" class="copy-btn__icon" />
+            <span class="copy-btn__label">{{ copied ? 'Copied' : 'Copy' }}</span>
+          </button>
         </div>
       </div>
     </section>
 
-    <!-- (Los stats viven en la fase 3 del hero; la "See it move" en la fase 4) -->
+    <!-- ════════ CODE IN ACTION ════════ -->
+    <section class="block">
+      <div class="block__head" data-reveal>
+        <h2 class="block__title">See it in action</h2>
+        <p class="block__sub">The same fluent, typed API for reads, writes and transactions.</p>
+      </div>
+      <div class="playground" data-reveal>
+        <ClientOnly>
+          <PlaygroundTerminal />
+        </ClientOnly>
+      </div>
+    </section>
 
     <!-- ════════ FEATURES ════════ -->
     <section class="block">
@@ -532,7 +266,6 @@ const clouds = [
   background: var(--bg);
   color: var(--fg);
 }
-/* oscuro: clase aplicada por useColorMode (infalible dentro de MDC) */
 .dbx--dark {
   --bg: #000;
   --fg: #eef3f8;
@@ -548,108 +281,56 @@ const clouds = [
 }
 [data-reveal].is-visible { opacity: 1; transform: none; }
 
-/* ── HERO ──
-   `.hero` es un TRACK alto: da la distancia de scroll para la animación.
-   `.hero__stage` queda pineado (sticky) y ocupa la pantalla mientras el track
-   se recorre; el progreso del scroll controla la entrada del cubo al chip. */
+/* ── HERO — banner estático (fondo LetterGlitch + contenido centrado) ── */
 .hero {
   position: relative;
   width: 100vw;
-  height: 1230vh; /* track: 5 fases + holds + dispersión lenta del core al final */
-  /* paleta fija oscura, sin importar el tema del resto de la página */
-  --bg: #000;
-  --fg: #eef3f8;
-  --muted: #93a1b0;
-  --card: rgba(255, 255, 255, 0.04);
-  --border: rgba(255, 255, 255, 0.1);
-  background: #000;
-  color: var(--fg);
-}
-.hero__stage {
-  position: sticky;
-  top: var(--ui-header-height, 4rem);
-  height: calc(100vh - var(--ui-header-height, 4rem));
-  min-height: 520px;
-  width: 100%;
+  min-height: calc(100vh - var(--ui-header-height, 4rem));
   display: flex;
-  flex-direction: column;
-  align-items: flex-start;
+  align-items: center;
   justify-content: center;
-  text-align: left;
-  overflow: hidden;
-  padding: 0 clamp(1.5rem, 7vw, 8rem);
+  text-align: center;
+  padding: clamp(4rem, 10vh, 8rem) clamp(1.25rem, 6vw, 4rem);
+  /* paleta fija oscura para el banner, sin importar el tema */
   background: #000;
+  color: #eef3f8;
+  overflow: hidden;
+  isolation: isolate;
 }
-/* Escena 3D corrida a la derecha y subida ~10% (sin tocar los parámetros 3D);
-   el área que queda expuesta a la izquierda/abajo es negra = fondo del hero. */
-.hero__canvas {
+/* Fondo animado de letras: ocupa todo el hero, detrás del contenido */
+.hero__bg {
   position: absolute;
   inset: 0;
   z-index: 0;
-  transform: translate(25%, -7%);
 }
-/* Oscurecido a la izquierda para legibilidad del texto; la derecha (escena) queda libre */
-.hero__veil {
+.hero__bg :deep(.lg) { background-color: #000; }
+/* Scrim extra tras el texto: garantiza contraste del título sobre el glitch,
+   además de la center-vignette del propio componente. */
+.hero__scrim {
   position: absolute;
   inset: 0;
   z-index: 1;
-  background:
-    linear-gradient(90deg, rgba(4, 5, 7, 0.78) 0%, rgba(4, 5, 7, 0.4) 38%, transparent 62%),
-    linear-gradient(180deg, transparent 75%, rgba(4, 5, 7, 0.5) 100%);
   pointer-events: none;
+  background:
+    radial-gradient(ellipse 60% 55% at 50% 48%, rgba(0, 0, 0, 0.72) 0%, rgba(0, 0, 0, 0.35) 45%, transparent 72%),
+    linear-gradient(180deg, rgba(0, 0, 0, 0.35) 0%, transparent 22%, transparent 78%, rgba(0, 0, 0, 0.5) 100%);
 }
 .hero__content {
   position: relative;
   z-index: 2;
-  max-width: 38rem;
-  /* corrido ~30% a la derecha respecto al borde izquierdo */
-  transform: translateX(30%);
-  text-shadow: 0 2px 24px rgba(4, 5, 7, 0.8);
+  max-width: 46rem;
+  text-shadow: 0 2px 28px rgba(0, 0, 0, 0.85);
 }
-
-/* ── MÓVIL/TABLET: el split (texto izq / escena der) se centra y apila ── */
-@media (max-width: 859px) {
-  .hero__stage {
-    align-items: center;
-    text-align: center;
-    padding: 0 1.25rem;
-  }
-  .hero__content { max-width: 100%; }
-  .hero__sub { margin-left: auto; margin-right: auto; }
-  /* En móvil el cubo va arriba y el texto abajo: oscurecemos fuerte la mitad
-     inferior para que el banner se lea limpio sobre el fondo. */
-  .hero__veil {
-    background:
-      linear-gradient(180deg, transparent 38%, rgba(4, 5, 7, 0.78) 62%, rgba(4, 5, 7, 0.94) 100%);
-  }
-  .hero__stats-head { top: 4%; }
-  /* números sobre el cubo: scrim oscuro translúcido para que se lean */
-  .statcard {
-    width: clamp(118px, 40vw, 158px);
-    background: rgba(4, 6, 10, 0.55);
-    border: 1px solid rgba(34, 211, 238, 0.18);
-    border-radius: 14px;
-    padding: 0.6rem 0.5rem;
-    backdrop-filter: blur(6px);
-  }
-  .statcard__num { font-size: clamp(1.7rem, 7.5vw, 2.4rem); }
-  .statcard__lbl { font-size: 0.74rem; }
-  .hero__powered { top: 58%; }
-  /* botones del hero centrados (mayor especificidad para ganar a la regla base
-     `.hero__cta` que aparece después en el stylesheet) */
-  .dbx .hero__cta { justify-content: center; }
-  .dbx .hero__install { text-align: center; }
+.hero__chip {
+  display: inline-flex; align-items: center; gap: 0.55rem;
+  font-size: 0.8rem; font-weight: 600; letter-spacing: 0.01em;
+  padding: 0.42rem 0.95rem; border-radius: 999px; margin-bottom: 1.7rem;
+  border: 1px solid color-mix(in srgb, var(--cyan) 40%, transparent);
+  background: rgba(6, 12, 18, 0.55);
+  backdrop-filter: blur(8px);
+  color: #dbf3fb;
 }
-
-.hero__badge {
-  display: inline-flex; align-items: center; gap: 0.5rem;
-  font-size: 0.8rem; font-weight: 500;
-  padding: 0.4rem 0.9rem; border-radius: 999px;
-  border: 1px solid color-mix(in srgb, var(--cyan) 35%, transparent);
-  background: color-mix(in srgb, var(--cyan) 8%, transparent);
-  color: var(--fg); margin-bottom: 1.6rem;
-}
-.hero__pulse {
+.hero__chip-dot {
   width: 8px; height: 8px; border-radius: 50%; background: var(--cyan);
   box-shadow: 0 0 0 0 color-mix(in srgb, var(--cyan) 70%, transparent);
   animation: pulse 2s infinite;
@@ -660,19 +341,19 @@ const clouds = [
   100% { box-shadow: 0 0 0 0 transparent; }
 }
 .hero__title {
-  font-size: clamp(2.6rem, 7vw, 5.2rem); font-weight: 800;
-  line-height: 1.02; letter-spacing: -0.03em; margin: 0 0 1.4rem;
+  font-size: clamp(2.6rem, 7vw, 5rem); font-weight: 800;
+  line-height: 1.03; letter-spacing: -0.03em; margin: 0 0 1.4rem;
 }
 .hero__grad {
   background: linear-gradient(120deg, var(--cyan), #3b82f6 55%, #a855f7);
   -webkit-background-clip: text; background-clip: text; color: transparent;
 }
 .hero__sub {
-  font-size: clamp(1rem, 2vw, 1.25rem); color: var(--muted);
-  max-width: 36rem; margin: 0 0 2.2rem; line-height: 1.6;
+  font-size: clamp(1rem, 2vw, 1.25rem); color: #c3cede;
+  max-width: 40rem; margin: 0 auto 2.2rem; line-height: 1.6;
 }
-.hero__sub strong { color: var(--fg); font-weight: 600; }
-.hero__cta { display: flex; gap: 0.9rem; justify-content: flex-start; flex-wrap: wrap; }
+.hero__sub strong { color: #fff; font-weight: 600; }
+.hero__cta { display: flex; gap: 0.9rem; justify-content: center; flex-wrap: wrap; }
 .btn {
   display: inline-flex; align-items: center; font-weight: 600; font-size: 0.95rem;
   padding: 0.8rem 1.5rem; border-radius: 999px;
@@ -683,9 +364,12 @@ const clouds = [
   box-shadow: 0 0 40px -8px color-mix(in srgb, var(--cyan) 70%, transparent);
 }
 .btn--primary:hover { transform: translateY(-2px) scale(1.02); box-shadow: 0 0 55px -5px var(--cyan); }
-.btn--ghost { border: 1px solid var(--border); color: var(--fg); background: var(--card); }
+.btn--ghost { border: 1px solid rgba(255, 255, 255, 0.18); color: #eef3f8; background: rgba(255, 255, 255, 0.04); }
 .btn--ghost:hover { transform: translateY(-2px); border-color: var(--cyan); }
-.hero__install { margin-top: 2.2rem; font-family: ui-monospace, monospace; font-size: 0.9rem; display: inline-flex; align-items: center; gap: 0.5rem; }
+.hero__install {
+  margin-top: 2.2rem; font-family: ui-monospace, monospace; font-size: 0.9rem;
+  display: inline-flex; align-items: center; gap: 0.5rem;
+}
 .hero__install code {
   display: inline-flex; align-items: center;
   padding: 0.6rem 1.3rem; border-radius: 999px;
@@ -697,7 +381,7 @@ const clouds = [
 }
 .hero__dollar { color: var(--cyan); margin-right: 0.6rem; font-weight: 700; }
 
-/* Botón "copiar comando" al lado del npm install (hero + CTA final) */
+/* Botón "copiar comando" */
 .copy-btn {
   display: inline-flex; align-items: center; gap: 0.35rem;
   padding: 0.5rem 0.8rem; border-radius: 999px; cursor: pointer;
@@ -712,86 +396,6 @@ const clouds = [
 .copy-btn:active { transform: translateY(1px); }
 .copy-btn__icon { width: 1rem; height: 1rem; }
 .copy-btn__label { font-weight: 600; letter-spacing: 0.02em; }
-.hero__scroll {
-  position: absolute; bottom: 5%; left: 50%; z-index: 2;
-  font-size: 0.75rem; letter-spacing: 0.1em; color: var(--muted);
-  animation: bob 2s ease-in-out infinite;
-}
-@keyframes bob { 0%, 100% { transform: translate(-50%, 0); } 50% { transform: translate(-50%, 6px); } }
-/* Título de la sección 2 (placa incrustada + bases de datos) */
-.hero__section2 {
-  position: absolute; top: 4%; left: 0; right: 0; z-index: 2;
-  text-align: center; padding: 0 1.5rem; pointer-events: none;
-  text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
-}
-.s2__title { font-size: clamp(1.9rem, 4.5vw, 3.2rem); font-weight: 800; letter-spacing: -0.02em; line-height: 1.05; }
-.s2__sub { color: var(--muted); margin-top: 0.2rem; font-size: clamp(0.95rem, 1.6vw, 1.1rem); }
-
-/* Overlay de bases de datos (HTML/SVG sobre el canvas) */
-.dbnet { position: absolute; inset: 0; z-index: 2; pointer-events: none; }
-.dbnet__svg {
-  position: absolute; inset: 0; width: 100%; height: 100%;
-  filter: drop-shadow(0 0 6px rgba(111, 210, 255, 0.55));
-}
-.dbnet__box {
-  position: absolute; transform: translate(-50%, -50%);
-  display: flex; flex-direction: column; align-items: center; gap: 0.45rem;
-  padding: 0.9rem 1rem 0.7rem;
-  border-radius: 16px;
-  border: 1.5px solid color-mix(in srgb, var(--cyan) 55%, transparent);
-  background: rgba(8, 16, 22, 0.55);
-  backdrop-filter: blur(6px);
-  box-shadow: 0 0 22px rgba(111, 210, 255, 0.35), inset 0 0 14px rgba(111, 210, 255, 0.12);
-  transition: opacity 0.25s ease;
-}
-.dbnet__logo { width: 52px; height: 52px; object-fit: contain; display: block; }
-.dbnet__label { font-size: 0.82rem; font-weight: 600; color: #cfe8f2; letter-spacing: 0.01em; }
-
-/* Sección 3 — stats de rendimiento */
-.hero__stats { position: absolute; inset: 0; z-index: 3; pointer-events: none; }
-.hero__stats-head {
-  position: absolute; top: 6%; left: 0; right: 0; text-align: center; padding: 0 1.5rem;
-  text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
-}
-.statcard { position: absolute; transform: translate(-50%, -50%); width: clamp(150px, 16vw, 230px); text-align: center; }
-.statcard__num {
-  font-size: clamp(2.4rem, 5vw, 3.6rem); font-weight: 800; letter-spacing: -0.03em; line-height: 1;
-  background: linear-gradient(120deg, var(--cyan), #3b82f6); -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.statcard__lbl { margin-top: 0.45rem; color: #cfe8f2; font-size: clamp(0.82rem, 1.4vw, 0.98rem); }
-
-/* Fase 4 — terminal "See it move" a la derecha */
-.hero__playground {
-  position: absolute; top: 50%; left: 50%; transform: translateY(-50%);
-  width: min(42%, 38rem); z-index: 4;
-  display: flex; flex-direction: column; gap: 1rem;
-}
-.pg__head { text-align: left; }
-.pg__head .s2__title { font-size: clamp(1.6rem, 3.5vw, 2.6rem); }
-.pg__head .s2__sub { margin-top: 0.3rem; }
-@media (max-width: 860px) {
-  /* en móvil el bloque (título + terminal) se ancla por arriba (no centrado),
-     dejando libre el tercio superior para el cubo. */
-  .hero__playground { position: absolute; left: 5%; right: 5%; width: auto; top: 43%; transform: none; }
-}
-
-/* Fase 5 — "Powered by Rust" bajo la estrella */
-.hero__powered {
-  position: absolute; top: 52%; left: 0; right: 0; z-index: 4; pointer-events: none;
-  text-align: center; padding: 0 1.5rem; text-shadow: 0 2px 24px rgba(4, 5, 7, 0.85);
-}
-
-/* ── STATS ── */
-.stats { padding: 4rem 1.5rem; border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
-.stats__grid { max-width: 64rem; margin: 0 auto; display: grid; grid-template-columns: repeat(4, 1fr); gap: 2rem; text-align: center; }
-@media (max-width: 640px) { .stats__grid { grid-template-columns: repeat(2, 1fr); } }
-.stat__num {
-  font-size: clamp(2.2rem, 5vw, 3.2rem); font-weight: 800; letter-spacing: -0.03em;
-  background: linear-gradient(120deg, var(--cyan), #3b82f6);
-  -webkit-background-clip: text; background-clip: text; color: transparent;
-}
-.stat__num span { font-size: 0.45em; }
-.stat__lbl { color: var(--muted); font-size: 0.85rem; margin-top: 0.4rem; }
 
 /* ── BLOCKS ── */
 .block { max-width: 72rem; margin: 0 auto; padding: 6rem 1.5rem; }
@@ -827,10 +431,10 @@ const clouds = [
 .bench__line { display: grid; grid-template-columns: 4.5rem 1fr 4.2rem; gap: 0.7rem; align-items: center; }
 .bench__name { font-size: 0.78rem; color: var(--muted); }
 .bench__name--db { color: var(--fg); font-weight: 600; }
-.bench__track { height: 0.7rem; background: rgba(255, 255, 255, 0.06); border-radius: 999px; overflow: hidden; }
+.bench__track { height: 0.7rem; background: rgba(127, 127, 127, 0.14); border-radius: 999px; overflow: hidden; }
 .bench__fill { height: 100%; border-radius: 999px; transition: width 0.6s cubic-bezier(0.16, 1, 0.3, 1); }
 .bench__fill--db { background: linear-gradient(90deg, var(--cyan), #3b82f6); box-shadow: 0 0 14px color-mix(in srgb, var(--cyan) 45%, transparent); }
-.bench__fill--rival { background: rgba(255, 255, 255, 0.22); }
+.bench__fill--rival { background: rgba(127, 127, 127, 0.35); }
 .bench__num { font-family: ui-monospace, monospace; font-size: 0.8rem; text-align: right; color: var(--muted); }
 .bench__num--db { color: var(--cyan); font-weight: 700; }
 .bench__chip {
@@ -846,7 +450,7 @@ const clouds = [
 .cmp__foot { text-align: center; margin-top: 2.2rem; }
 .cmp__foot a { color: var(--cyan); font-weight: 600; }
 
-/* ── CLOUDS (una connection string + tags de proveedores) ── */
+/* ── CLOUDS ── */
 .clouds { max-width: 52rem; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 2rem; }
 .clouds__url {
   font-family: ui-monospace, monospace; font-size: clamp(0.8rem, 1.6vw, 1rem); color: #cfe8f2;
@@ -876,7 +480,6 @@ const clouds = [
 
 /* ── FINAL ── */
 .final { text-align: center; padding: 7rem 1.5rem; border-top: 1px solid var(--border); }
-/* el CTA final reusa .hero__cta (que va a la izquierda en el hero) → aquí centrado */
 .final .hero__cta { justify-content: center; }
 .final__title { font-size: clamp(2rem, 5vw, 3.4rem); font-weight: 800; letter-spacing: -0.03em; }
 .final__sub { color: var(--muted); margin: 0.8rem 0 1.8rem; font-size: 1.1rem; }
